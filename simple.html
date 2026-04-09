@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>UI预览工具</title>
+    <style>
+        body { margin: 0; background: #000; display: flex; justify-content: center; align-items: center; height: 100vh; }
+        .canvas { width: 800px; height: 500px; border: 5px solid red; position: relative; }
+        #wallpaper { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: blue; display: flex; justify-content: center; align-items: center; font-size: 30px; color: white; font-weight: bold; }
+        .ui { position: absolute; border: 2px solid yellow; }
+        #desktop { top: 20px; left: 20px; width: 100px; height: 80px; background: green; }
+        #status { top: 10px; left: 150px; width: 200px; height: 30px; background: pink; }
+        #btn { top: 120px; left: 30px; width: 80px; height: 40px; background: purple; }
+        #chat { top: 120px; right: 30px; width: 120px; height: 80px; background: white; }
+        #tip { bottom: 50px; right: 30px; width: 100px; height: 60px; background: cyan; }
+        #float { top: 200px; left: 50px; width: 90px; height: 70px; background: orange; }
+        #mood { top: 20px; right: 30px; width: 40px; height: 40px; background: red; border-radius: 50%; }
+        #edit { position: fixed; top: 10px; left: 10px; padding: 10px; background: green; color: white; }
+        #panel { position: fixed; top: 50px; right: 10px; background: black; color: white; padding: 10px; display: none; }
+    </style>
+</head>
+<body>
+    <button id="edit" onclick="toggleEdit()">编辑模式</button>
+    <div class="canvas">
+        <div id="wallpaper">我是壁纸层！</div>
+        <div class="ui" id="desktop">桌面</div>
+        <div class="ui" id="status">状态栏</div>
+        <div class="ui" id="btn">按钮</div>
+        <div class="ui" id="chat">聊天</div>
+        <div class="ui" id="tip">提示</div>
+        <div class="ui" id="float">浮窗</div>
+        <div class="ui" id="mood">心</div>
+    </div>
+    <div id="panel">
+        <p>更换壁纸 <button onclick="alert('换壁纸')">换</button></p>
+        <p>重置全部 <button onclick="location.reload()">重置</button></p>
+    </div>
+    <script>
+        function toggleEdit() {
+            var p = document.getElementById('panel');
+            p.style.display = p.style.display === 'none' ? 'block' : 'none';
+        }
+        document.addEventListener('keydown', function(e) {
+            if(e.key === '`') toggleEdit();
+        });
+    </script>
+</body>
+</html>

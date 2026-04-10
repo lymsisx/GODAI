@@ -26,7 +26,8 @@ class UIElementBase {
             zIndex: 100,
             visible: true,
             opacity: 1,
-            backgroundColor: 'transparent'
+            backgroundColor: 'transparent',
+            objectFit: 'cover'
         };
         
         // 合并配置
@@ -60,7 +61,7 @@ class UIElementBase {
             this.imageElement.alt = this.config.name || this.id;
             this.imageElement.style.width = '100%';
             this.imageElement.style.height = '100%';
-            this.imageElement.style.objectFit = 'cover';
+            this.imageElement.style.objectFit = this.config.objectFit || 'cover';
             container.appendChild(this.imageElement);
             console.log(`📸 添加图片: ${imageSrc}`);
         } else if (this.config.text) {
@@ -458,7 +459,10 @@ class UIElementBase {
             height: this.config.baseSize?.height ?? 0,
             shadow: this.config.shadow || {},
             visible: this.config.visible !== false,
-            zIndex: this.config.zIndex || 100
+            zIndex: this.config.zIndex || 100,
+            image: this.config.image || null,
+            defaultImage: this.config.defaultImage || null,
+            objectFit: this.config.objectFit || 'cover'
         };
     }
 

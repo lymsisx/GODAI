@@ -71,16 +71,15 @@ class EditorManager {
         panel.className = 'edit-panel';
         panel.style.cssText = `
             position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
+            top: 60px;
+            left: 20px;
             background: rgba(0, 0, 0, 0.95);
             color: white;
             padding: 20px;
             border-radius: 10px;
             z-index: 10000;
-            width: 400px;
-            max-height: 80vh;
+            width: 380px;
+            max-height: calc(100vh - 80px);
             overflow-y: auto;
             display: none;
             box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);

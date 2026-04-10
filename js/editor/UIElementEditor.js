@@ -41,7 +41,10 @@ class UIElementEditor {
                 opacity: 0.7
             },
             visible: true,
-            zIndex: 100
+            zIndex: 100,
+            image: null,
+            defaultImage: null,
+            objectFit: 'cover'
         };
     }
 
@@ -144,6 +147,14 @@ class UIElementEditor {
         // 层级控制
         controlGroup.appendChild(this._createZIndexControl());
         controlGroup.appendChild(document.createElement('br'));
+
+        // 图片控制（仅在元素有图片时显示）
+        if (this.uiElement && (this.uiElement.config.image || this.uiElement.config.defaultImage)) {
+            controlGroup.appendChild(this._createImageControl());
+            controlGroup.appendChild(document.createElement('br'));
+            controlGroup.appendChild(this._createObjectFitControl());
+            controlGroup.appendChild(document.createElement('br'));
+        }
         
         // 操作按钮
         controlGroup.appendChild(this._createActionButtons());
@@ -810,6 +821,166 @@ class UIElementEditor {
         }
         
         console.log('✏️ UI元素编辑器配置已刷新，元素ID:', this.config.id, '配置:', this.config);
+    }
+
+    /**
+     * 创建图片控制
+     */
+    _createImageControl() {
+        const container = document.createElement('div');
+        container.className = 'control-row';
+
+        const label = document.createElement('label');
+        label.textContent = '图片设置:';
+        label.style.display = 'block';
+        label.style.marginBottom = '5px';
+        label.style.fontSize = '12px';
+        container.appendChild(label);
+
+        // 图片更换按钮
+        const changeImageBtn = document.createElement('button');
+        changeImageBtn.textContent = '更换图片';
+        changeImageBtn.style.cssText = `
+            background: #2196F3;
+            color: white;
+            border: none;
+            padding: 6px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            margin-right: 10px;
+        `;
+        changeImageBtn.addEventListener('click', () => {
+            this._changeImage();
+        });
+        container.appendChild(changeImageBtn);
+
+        // 清除图片按钮
+        const clearImageBtn = document.createElement('button');
+        clearImageBtn.textContent = '清除图片';
+        clearImageBtn.style.cssText = `
+            background: #f44336;
+            color: white;
+            border: none;
+            padding: 6px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+        `;
+        clearImageBtn.addEventListener('click', () => {
+            if (confirm('确定要清除当前图片吗？')) {
+                this.uiElement.updateImage(null);
+                alert('图片已清除！');
+            }
+        });
+        container.appendChild(clearImageBtn);
+
+        return container;
+    }
+
+    /**
+     * 创建图片拉伸模式控制
+     */
+    _createObjectFitControl() {
+        const container = document.createElement('div');
+        container.className = 'control-row';
+
+        const label = document.createElement('label');
+        label.textContent = '图片拉伸模式:';
+        label.style.display = 'block';
+        label.style.marginBottom = '5px';
+        label.style.fontSize = '12px';
+        container.appendChild(label);
+
+        // object-fit选择下拉框
+        const select = document.createElement('select');
+        select.style.cssText = `
+            padding: 4px 8px;
+            font-size: 12px;
+            border-radius: 4px;
+            border: 1px solid #555;
+            background: #333;
+            color: white;
+            width: 120px;
+        `;
+
+        const options = [
+            { value: 'cover', text: '覆盖 (cover)' },
+            { value: 'contain', text: '包含 (contain)' },
+            { value: 'fill', text: '填充 (fill)' },
+            { value: 'none', text: '无 (none)' },
+            { value: 'scale-down', text: '缩放缩小 (scale-down)' }
+        ];
+
+        options.forEach(option => {
+            const optionEl = document.createElement('option');
+            optionEl.value = option.value;
+            optionEl.textContent = option.text;
+            if (this.config.objectFit === option.value ||
+                (!this.config.objectFit && option.value === 'cover')) {
+                optionEl.selected = true;
+            }
+            select.appendChild(optionEl);
+        });
+
+        select.addEventListener('change', () => {
+            const objectFit = select.value;
+            if (this.controls.livePreview && this.controls.livePreview.checked) {
+                // 调用UIElementBase的updateObjectFit方法
+                if (typeof this.uiElement.updateObjectFit === 'function') {
+                    this.uiElement.updateObjectFit(objectFit);
+                } else {
+                    // 后备方案：直接更新样式
+                    if (this.uiElement.imageElement) {
+                        this.uiElement.imageElement.style.objectFit = objectFit;
+                    }
+                }
+            }
+            this.config.objectFit = objectFit;
+        });
+
+        container.appendChild(select);
+
+        // 存储控件引用
+        this.controls.objectFit = select;
+
+        return container;
+    }
+
+    /**
+     * 更换图片
+     */
+    _changeImage() {
+        // 创建文件输入框
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'image/*';
+        input.style.display = 'none';
+
+        input.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            if (!file.type.match('image.*')) {
+                alert('请选择图片文件！');
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                const imageDataUrl = event.target.result;
+                this.uiElement.updateImage(imageDataUrl);
+                alert('图片已更换！');
+            };
+            reader.readAsDataURL(file);
+
+            // 清理
+            input.value = '';
+        });
+
+        document.body.appendChild(input);
+        input.click();
+        document.body.removeChild(input);
     }
 }
 

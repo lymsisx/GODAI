@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UI预览工具 - 系统测试</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: 'Segoe UI', Arial, sans-serif;
+            background: #1a1a2e;
+            color: #fff;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        h1 {
+            color: #4CAF50;
+            border-bottom: 2px solid #4CAF50;
+            padding-bottom: 10px;
+        }
+        
+        .test-section {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .test-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+        
+        .test-card {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+            padding: 15px;
+            border: 1px solid #333;
+            transition: all 0.3s ease;
+        }
+        
+        .test-card:hover {
+            border-color: #4CAF50;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+        }
+        
+        .test-card h3 {
+            margin-top: 0;
+            color: #FF9800;
+            font-size: 16px;
+        }
+        
+        .test-result {
+            margin-top: 10px;
+            padding: 8px;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        
+        .success {
+            background: rgba(76, 175, 80, 0.2);
+            border-left: 4px solid #4CAF50;
+            color: #a5d6a7;
+        }
+        
+        .error {
+            background: rgba(244, 67, 54, 0.2);
+            border-left: 4px solid #f44336;
+            color: #ef9a9a;
+        }
+        
+        .warning {
+            background: rgba(255, 193, 7, 0.2);
+            border-left: 4px solid #FFC107;
+            color: #fff176;
+        }
+        
+        .btn {
+            background: #2196F3;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+            margin-right: 10px;
+            transition: all 0.2s ease;
+        }
+        
+        .btn:hover {
+            opacity: 0.9;
+            transform: translateY(-1px);
+        }
+        
+        .btn-success {
+            background: #4CAF50;
+        }
+        
+        .btn-danger {
+            background: #f44336;
+        }
+        
+        .btn-warning {
+            background: #FF9800;
+        }
+        
+        .console {
+            background: #000;
+            color: #0f0;
+            font-family: monospace;
+            padding: 15px;
+            border-radius: 5px;
+            max-height: 300px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            margin-top: 10px;
+        }
+        
+        code {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 2px 5px;
+            border-radius: 3px;
+            font-family: monospace;
+            color: #ffd700;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 UI预览工具 - 系统测试</h1>
+        
+        <div class="test-section">
+            <h2>📦 模块加载测试</h2>
+            <div class="test-grid">
+                <div class="test-card">
+                    <h3>UIElementBase 类</h3>
+                    <div id="test-uielementbase" class="test-result pending">测试中...</div>
+                </div>
+                <div class="test-card">
+                    <h3>UIManager 类</h3>
+                    <div id="test-uimanager" class="test-result pending">测试中...</div>
+                </div>
+                <div class="test-card">
+                    <h3>Scaler 类</h3>
+                    <div id="test-scaler" class="test-result pending">测试中...</div>
+                </div>
+                <div class="test-card">
+                    <h3>UIElementEditor 类</h3>
+                    <div id="test-uieditor" class="test-result pending">测试中...</div>
+                </div>
+                <div class="test-card">
+                    <h3>EditorManager 类</h3>
+                    <div id="test-editormanager" class="test-result pending">测试中...</div>
+                </div>
+                <div class="test-card">
+                    <h3>App 类</h3>
+                    <div id="test-app" class="test-result pending">测试中...</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="test-section">
+            <h2>🎛️ 功能测试</h2>
+            <div class="test-grid">
+                <div class="test-card">
+                    <h3>UI元素注册</h3>
+                    <div id="test-element-registration" class="test-result pending">测试中...</div>
+                    <button class="btn btn-success" onclick="testElementRegistration()">运行测试</button>
+                </div>
+                <div class="test-card">
+                    <h3>编辑器创建</h3>
+                    <div id="test-editor-creation" class="test-result pending">测试中...</div>
+                    <button class="btn btn-success" onclick="testEditorCreation()">运行测试</button>
+                </div>
+                <div class="test-card">
+                    <h3>配置保存/加载</h3>
+                    <div id="test-config-persistence" class="test-result pending">测试中...</div>
+                    <button class="btn btn-success" onclick="testConfigPersistence()">运行测试</button>
+                </div>
+                <div class="test-card">
+                    <h3>阴影系统</h3>
+                    <div id="test-shadow-system" class="test-result pending">测试中...</div>
+                    <button class="btn btn-success" onclick="testShadowSystem()">运行测试</button>
+                </div>
+            </div>
+        </div>
+        
+        <div class="test-section">
+            <h2>🔍 系统状态</h2>
+            <button class="btn btn-warning" onclick="runAllTests()">运行所有测试</button>
+            <button class="btn btn-danger" onclick="clearResults()">清除结果</button>
+            
+            <div class="console" id="test-console">
+系统测试控制台已就绪。
+点击"运行所有测试"按钮开始测试。
+            </div>
+            
+            <div id="system-status" class="test-result success">
+                系统状态：等待测试
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 测试结果存储
+        const testResults = {};
+        let testConsole = '';
+        
+        // 更新测试控制台
+        function updateConsole(message) {
+            testConsole += new Date().toLocaleTimeString() + ' - ' + message + '\n';
+            document.getElementById('test-console').textContent = testConsole;
+            document.getElementById('test-console').scrollTop = document.getElementById('test-console').scrollHeight;
+        }
+        
+        // 更新测试结果
+        function updateTestResult(testId, success, message) {
+            const element = document.getElementById(testId);
+            if (!element) return;
+            
+            testResults[testId] = { success, message };
+            
+            element.className = 'test-result ' + (success ? 'success' : 'error');
+            element.innerHTML = success ? 
+                '✅ ' + message : 
+                '❌ ' + message;
+        }
+        
+        // 检查模块是否存在
+        function testModule(moduleName, testId) {
+            const exists = typeof window[moduleName] !== 'undefined';
+            updateTestResult(testId, exists, 
+                exists ? `${moduleName} 类已加载` : `${moduleName} 类未找到`
+            );
+            updateConsole(`模块检查: ${moduleName} - ${exists ? '✓' : '✗'}`);
+            return exists;
+        }
+        
+        // 测试UI元素注册
+        function testElementRegistration() {
+            updateConsole('开始测试UI元素注册...');
+            
+            try {
+                if (!window.UIManager) {
+                    updateTestResult('test-element-registration', false, 'UIManager未加载');
+                    return;
+                }
+                
+                const uiManager = new UIManager();
+                
+                // 测试注册元素
+                const testElementConfig = {
+                    id: 'test-element',
+                    type: 'generic',
+                    basePosition: { x: 100, y: 100 },
+                    baseSize: { width: 200, height: 100 }
+                };
+                
+                const element = uiManager.registerElement(testElementConfig);
+                
+                if (element) {
+                    updateTestResult('test-element-registration', true, 
+                        `成功注册UI元素: ${element.id} (${uiManager.elements.size}个元素)`
+                    );
+                    updateConsole(`注册元素测试成功: ${element.id}`);
+                } else {
+                    updateTestResult('test-element-registration', false, 'UI元素注册失败');
+                }
+                
+            } catch (error) {
+                updateTestResult('test-element-registration', false, 'UI元素注册出错: ' + error.message);
+                updateConsole(`注册元素测试出错: ${error}`);
+            }
+        }
+        
+        // 测试编辑器创建
+        function testEditorCreation() {
+            updateConsole('开始测试编辑器创建...');
+            
+            try {
+                if (!window.UIElementEditor) {
+                    updateTestResult('test-editor-creation', false, 'UIElementEditor未加载');
+                    return;
+                }
+                
+                // 创建测试UI元素
+                const testElement = {
+                    id: 'test-editor-element',
+                    getConfig: () => ({
+                        id: 'test-editor-element',
+                        x: 100,
+                        y: 100,
+                        width: 200,
+                        height: 100,
+                        shadow: { offsetX: 4, offsetY: 4, color: '#333' },
+                        visible: true,
+                        zIndex: 100
+                    }),
+                    update: () => {},
+                    show: () => {},
+                    hide: () => {},
+                    saveConfig: () => {}
+                };
+                
+                const editor = new UIElementEditor(testElement);
+                
+                if (editor && editor.config) {
+                    updateTestResult('test-editor-creation', true, 
+                        `成功创建编辑器: ${editor.config.id}`
+                    );
+                    updateConsole(`编辑器创建测试成功: ${editor.config.id}`);
+                } else {
+                    updateTestResult('test-editor-creation', false, '编辑器创建失败');
+                }
+                
+            } catch (error) {
+                updateTestResult('test-editor-creation', false, '编辑器创建出错: ' + error.message);
+                updateConsole(`编辑器创建测试出错: ${error}`);
+            }
+        }
+        
+        // 测试配置持久化
+        function testConfigPersistence() {
+            updateConsole('开始测试配置持久化...');
+            
+            try {
+                // 测试localStorage
+                const testKey = 'ui_test_config_' + Date.now();
+                const testConfig = {
+                    test: 'data',
+                    timestamp: new Date().toISOString()
+                };
+                
+                localStorage.setItem(testKey, JSON.stringify(testConfig));
+                const loadedConfig = JSON.parse(localStorage.getItem(testKey));
+                localStorage.removeItem(testKey);
+                
+                if (loadedConfig && loadedConfig.test === 'data') {
+                    updateTestResult('test-config-persistence', true, 
+                        '配置持久化测试通过 (localStorage正常)'
+                    );
+                    updateConsole('配置持久化测试成功');
+                } else {
+                    updateTestResult('test-config-persistence', false, '配置持久化测试失败');
+                }
+                
+            } catch (error) {
+                updateTestResult('test-config-persistence', false, '配置持久化出错: ' + error.message);
+                updateConsole(`配置持久化测试出错: ${error}`);
+            }
+        }
+        
+        // 测试阴影系统
+        function testShadowSystem() {
+            updateConsole('开始测试阴影系统...');
+            
+            try {
+                if (!window.UIElementBase) {
+                    updateTestResult('test-shadow-system', false, 'UIElementBase未加载');
+                    return;
+                }
+                
+                // 创建测试元素
+                const element = new UIElementBase({
+                    id: 'test-shadow-element',
+                    type: 'test',
+                    basePosition: { x: 0, y: 0 },
+                    baseSize: { width: 100, height: 50 }
+                });
+                
+                // 测试应用阴影
+                const shadowConfig = {
+                    offsetX: 5,
+                    offsetY: 5,
+                    color: '#000000',
+                    opacity: 0.5
+                };
+                
+                if (typeof element.applyShadow === 'function') {
+                    updateTestResult('test-shadow-system', true, 
+                        '阴影系统测试通过 (applyShadow方法可用)'
+                    );
+                    updateConsole('阴影系统测试成功');
+                } else {
+                    updateTestResult('test-shadow-system', false, 'applyShadow方法不可用');
+                }
+                
+            } catch (error) {
+                updateTestResult('test-shadow-system', false, '阴影系统测试出错: ' + error.message);
+                updateConsole(`阴影系统测试出错: ${error}`);
+            }
+        }
+        
+        // 运行所有测试
+        function runAllTests() {
+            updateConsole('========== 开始运行所有测试 ==========');
+            updateConsole('开始时间: ' + new Date().toLocaleString());
+            
+            // 模块加载测试
+            testModule('UIElementBase', 'test-uielementbase');
+            testModule('UIManager', 'test-uimanager');
+            testModule('Scaler', 'test-scaler');
+            testModule('UIElementEditor', 'test-uieditor');
+            testModule('EditorManager', 'test-editormanager');
+            testModule('App', 'test-app');
+            
+            // 功能测试
+            testElementRegistration();
+            testEditorCreation();
+            testConfigPersistence();
+            testShadowSystem();
+            
+            updateConsole('========== 所有测试完成 ==========');
+            updateConsole('结束时间: ' + new Date().toLocaleString());
+            
+            // 更新系统状态
+            const successCount = Object.values(testResults).filter(r => r.success).length;
+            const totalCount = Object.keys(testResults).length;
+            const statusElement = document.getElementById('system-status');
+            
+            if (totalCount > 0) {
+                statusElement.className = 'test-result ' + 
+                    (successCount === totalCount ? 'success' : 
+                     successCount >= totalCount / 2 ? 'warning' : 'error');
+                statusElement.textContent = 
+                    `系统状态: ${successCount}/${totalCount} 项测试通过 (${Math.round(successCount/totalCount*100)}%)`;
+            }
+        }
+        
+        // 清除结果
+        function clearResults() {
+            testConsole = '';
+            document.getElementById('test-console').textContent = '系统测试控制台已清空。';
+            
+            // 重置所有测试结果
+            const resultElements = document.querySelectorAll('.test-result');
+            resultElements.forEach(el => {
+                el.className = 'test-result pending';
+                el.textContent = '测试中...';
+            });
+            
+            document.getElementById('system-status').className = 'test-result success';
+            document.getElementById('system-status').textContent = '系统状态：等待测试';
+            
+            updateConsole('测试结果已清除');
+        }
+        
+        // 页面加载时自动加载模块
+        window.addEventListener('load', function() {
+            updateConsole('页面加载完成，加载测试模块...');
+            
+            // 动态加载所需的JavaScript模块
+            const modules = [
+                'js/ui/UIElementBase.js',
+                'js/core/UIManager.js',
+                'js/core/Scaler.js',
+                'js/editor/UIElementEditor.js',
+                'js/editor/EditorManager.js',
+                'js/core/App.js'
+            ];
+            
+            let loadedCount = 0;
+            
+            modules.forEach(modulePath => {
+                const script = document.createElement('script');
+                script.src = modulePath;
+                script.onload = () => {
+                    loadedCount++;
+                    updateConsole(`✅ 加载模块: ${modulePath}`);
+                    
+                    if (loadedCount === modules.length) {
+                        updateConsole('所有模块加载完成，可以开始测试。');
+                        setTimeout(runAllTests, 500);
+                    }
+                };
+                script.onerror = () => {
+                    loadedCount++;
+                    updateConsole(`❌ 加载模块失败: ${modulePath}`);
+                    
+                    if (loadedCount === modules.length) {
+                        updateConsole('所有模块加载完成（部分失败），可以开始测试。');
+                        setTimeout(runAllTests, 500);
+                    }
+                };
+                document.head.appendChild(script);
+            });
+        });
+    </script>
+</body>
+</html>

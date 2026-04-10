@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>模块测试页面</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            margin: 20px; 
+            font-family: Arial, sans-serif; 
+            background: #f5f5f5;
+        }
+        
+        .test-container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        h1 { color: #333; margin-bottom: 20px; }
+        h2 { color: #666; margin: 15px 0 10px 0; }
+        
+        .module-test {
+            margin: 15px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background: #f9f9f9;
+        }
+        
+        .test-btn {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            margin: 5px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        
+        .test-btn:hover { background: #45a049; }
+        
+        .result {
+            margin-top: 10px;
+            padding: 10px;
+            background: #e8f5e8;
+            border: 1px solid #c8e6c9;
+            border-radius: 4px;
+            font-family: monospace;
+            white-space: pre-wrap;
+        }
+        
+        .error {
+            background: #ffebee;
+            border-color: #ffcdd2;
+            color: #c62828;
+        }
+    </style>
+</head>
+<body>
+    <div class="test-container">
+        <h1>🎨 UI预览工具 - 模块测试</h1>
+        <p>测试所有JavaScript模块是否正常工作。</p>
+        
+        <div class="module-test">
+            <h2>1. Scaler 模块测试</h2>
+            <p>测试缩放计算功能。</p>
+            <button class="test-btn" onclick="testScaler()">测试Scaler</button>
+            <div id="scalerResult" class="result"></div>
+        </div>
+        
+        <div class="module-test">
+            <h2>2. Storage 模块测试</h2>
+            <p>测试本地存储功能。</p>
+            <button class="test-btn" onclick="testStorage()">测试Storage</button>
+            <div id="storageResult" class="result"></div>
+        </div>
+        
+        <div class="module-test">
+            <h2>3. UIElementBase 模块测试</h2>
+            <p>测试UI元素基础类。</p>
+            <button class="test-btn" onclick="testUIElement()">测试UIElement</button>
+            <div id="uiElementResult" class="result"></div>
+        </div>
+        
+        <div class="module-test">
+            <h2>4. 状态栏显示测试</h2>
+            <p>显示状态栏的实际效果。</p>
+            <button class="test-btn" onclick="showStatusBar()">显示状态栏</button>
+            <div id="statusBarPreview" style="margin-top: 20px; height: 100px; border: 1px solid #ccc; position: relative;"></div>
+        </div>
+        
+        <div class="module-test">
+            <h2>5. 进入主应用</h2>
+            <p>启动完整的UI预览工具。</p>
+            <button class="test-btn" onclick="location.href='index.html'" style="background: #2196F3;">🚀 启动主应用</button>
+        </div>
+    </div>
+    
+    <script src="js/utils/Scaler.js"></script>
+    <script src="js/utils/Storage.js"></script>
+    <script src="js/ui/UIElementBase.js"></script>
+    <script src="js/ui/StatusBarUI.js"></script>
+    
+    <script>
+        function testScaler() {
+            try {
+                const scale = Scaler.getScale();
+                const actualWidth = Scaler.toActual(2000);
+                const actualHeight = Scaler.toActual(200);
+                const info = Scaler.getScaleInfo();
+                
+                document.getElementById('scalerResult').innerHTML = `
+✅ Scaler测试成功！
+基准分辨率: ${Scaler.BASE_WIDTH}×${Scaler.BASE_HEIGHT}
+当前窗口: ${window.innerWidth}×${window.innerHeight}
+缩放比例: ${scale.toFixed(3)}
+状态栏基准尺寸: 2000×200
+状态栏实际尺寸: ${Math.round(actualWidth)}×${Math.round(actualHeight)}px
+                `;
+            } catch (error) {
+                document.getElementById('scalerResult').innerHTML = '❌ Scaler测试失败: ' + error.message;
+                document.getElementById('scalerResult').className = 'result error';
+            }
+        }
+        
+        function testStorage() {
+            try {
+                // 测试保存
+                Storage.save('test_key', { name: '测试数据', value: 123, timestamp: new Date().toISOString() });
+                
+                // 测试读取
+                const data = Storage.load('test_key', {});
+                
+                // 测试移除
+                Storage.remove('test_key');
+                
+                document.getElementById('storageResult').innerHTML = `
+✅ Storage测试成功！
+保存数据: ${JSON.stringify({ name: '测试数据', value: 123 })}
+读取数据: ${JSON.stringify(data)}
+数据已成功移除
+                `;
+            } catch (error) {
+                document.getElementById('storageResult').innerHTML = '❌ Storage测试失败: ' + error.message;
+                document.getElementById('storageResult').className = 'result error';
+            }
+        }
+        
+        function testUIElement() {
+            try {
+                // 创建测试元素
+                const element = new UIElement('testElement', {
+                    x: 100,
+                    y: 100,
+                    width: 300,
+                    height: 150,
+                    shadow: {
+                        offsetX: 5,
+                        offsetY: 5,
+                        color: '#666666'
+                    }
+                });
+                
+                // 测试配置获取
+                const config = element.getConfig();
+                
+                document.getElementById('uiElementResult').innerHTML = `
+✅ UIElement测试成功！
+元素ID: ${element.id}
+位置: (${config.x}, ${config.y})
+尺寸: ${config.width}×${config.height}
+阴影: X偏移${config.shadow.offsetX}px, Y偏移${config.shadow.offsetY}px, 颜色${config.shadow.color}
+                `;
+            } catch (error) {
+                document.getElementById('uiElementResult').innerHTML = '❌ UIElement测试失败: ' + error.message;
+                document.getElementById('uiElementResult').className = 'result error';
+            }
+        }
+        
+        function showStatusBar() {
+            try {
+                const preview = document.getElementById('statusBarPreview');
+                preview.innerHTML = '';
+                
+                // 创建状态栏预览
+                const statusBar = new StatusBarUI();
+                const config = statusBar.getConfig();
+                
+                const container = document.createElement('div');
+                container.style.cssText = `
+                    position: relative;
+                    width: ${Scaler.toActual(config.width)}px;
+                    height: ${Scaler.toActual(config.height)}px;
+                    margin: 0 auto;
+                `;
+                
+                // 阴影层
+                const shadow = document.createElement('div');
+                shadow.style.cssText = `
+                    position: absolute;
+                    top: ${Scaler.toActual(config.shadow.offsetY)}px;
+                    left: ${Scaler.toActual(config.shadow.offsetX)}px;
+                    width: 100%;
+                    height: 100%;
+                    background: ${config.shadow.color};
+                `;
+                
+                // 本体层
+                const main = document.createElement('div');
+                main.style.cssText = `
+                    position: absolute;
+                    top: 0;
+                    left: 0;
+                    width: 100%;
+                    height: 100%;
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    color: white;
+                    display: flex;
+                    justify-content: center;
+                    align-items: center;
+                    font-weight: bold;
+                    font-size: 14px;
+                `;
+                main.textContent = '状态栏预览';
+                
+                container.appendChild(shadow);
+                container.appendChild(main);
+                preview.appendChild(container);
+                
+                preview.innerHTML += `<div class="result" style="margin-top: 10px;">
+✅ 状态栏预览创建成功！
+位置: (${config.x}, ${config.y}) 基准像素
+尺寸: ${config.width}×${config.height} 基准像素
+阴影: 偏移(${config.shadow.offsetX}, ${config.shadow.offsetY})px, 颜色: ${config.shadow.color}
+实际尺寸: ${Math.round(Scaler.toActual(config.width))}×${Math.round(Scaler.toActual(config.height))}px
+                </div>`;
+            } catch (error) {
+                document.getElementById('statusBarPreview').innerHTML = `
+                    <div class="result error">❌ 状态栏预览失败: ${error.message}</div>
+                `;
+            }
+        }
+        
+        // 页面加载时自动测试Scaler
+        window.addEventListener('load', testScaler);
+    </script>
+</body>
+</html>

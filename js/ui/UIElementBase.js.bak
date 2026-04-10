@@ -1,0 +1,348 @@
+/**
+ * UI元素基类
+ * 所有UI组件的基类，提供通用功能
+ */
+class UIElementBase {
+    /**
+     * 构造函数
+     * @param {Object} config 元素配置
+     * @param {string} config.id 元素ID
+     * @param {string} config.type 元素类型
+     * @param {Object} config.basePosition 基准位置 {x, y}
+     * @param {Object} config.baseSize 基准尺寸 {width, height}
+     * @param {number} config.zIndex 层级索引
+     */
+    constructor(config) {
+        this.id = config.id;
+        this.type = config.type;
+        this.config = config;
+        this.domElement = null;
+        this.shadowElement = null;
+        
+        // 默认配置
+        this.defaultConfig = {
+            basePosition: { x: 0, y: 0 },
+            baseSize: { width: 100, height: 100 },
+            zIndex: 100,
+            visible: true,
+            opacity: 1,
+            backgroundColor: 'transparent'
+        };
+        
+        // 合并配置
+        this.config = { ...this.defaultConfig, ...config };
+    }
+    
+    /**
+     * 渲染元素（需子类实现）
+     * @abstract
+     */
+    render() {
+        throw new Error('子类必须实现 render() 方法');
+    }
+    
+    /**
+     * 创建DOM容器
+     * @returns {HTMLElement} 创建的DOM元素
+     */
+    createContainer() {
+        const container = document.createElement('div');
+        container.id = this.id + 'Container';
+        container.className = 'ui-element-container';
+        container.dataset.type = this.type;
+        container.dataset.elementId = this.id;
+        
+        // 设置样式
+        container.style.position = 'fixed';
+        container.style.pointerEvents = 'auto'; // 允许交互
+        
+        return container;
+    }
+    
+    /**
+     * 应用缩放
+     */
+    applyScale() {
+        if (!this.domElement) return;
+        
+        const Scaler = window.Scaler;
+        if (!Scaler) {
+            console.error('Scaler未加载');
+            return;
+        }
+        
+        // 计算实际位置和尺寸
+        const actualPosition = Scaler.scalePosition(
+            this.config.basePosition.x,
+            this.config.basePosition.y
+        );
+        
+        const actualSize = Scaler.scaleSize(
+            this.config.baseSize.width,
+            this.config.baseSize.height
+        );
+        
+        // 应用位置
+        this.domElement.style.left = `${actualPosition.x}px`;
+        this.domElement.style.top = `${actualPosition.y}px`;
+        
+        // 应用尺寸
+        this.domElement.style.width = `${actualSize.width}px`;
+        this.domElement.style.height = `${actualSize.height}px`;
+        
+        // 应用层级
+        this.domElement.style.zIndex = this.config.zIndex;
+        
+        // 应用可见性
+        this.domElement.style.display = this.config.visible ? 'block' : 'none';
+        
+        // 应用透明度
+        this.domElement.style.opacity = this.config.opacity;
+        
+        // 应用背景色
+        this.domElement.style.backgroundColor = this.config.backgroundColor;
+    }
+    
+    /**
+     * 应用阴影效果
+     * @param {Object} shadowConfig 阴影配置
+     * @param {number} shadowConfig.offsetX X轴偏移
+     * @param {number} shadowConfig.offsetY Y轴偏移
+     * @param {string} shadowConfig.color 阴影颜色
+     * @param {number} shadowConfig.opacity 阴影透明度
+     */
+    applyShadow(shadowConfig) {
+        if (!shadowConfig || !this.domElement) return;
+        
+        // 确保阴影元素存在
+        if (!this.shadowElement) {
+            this.shadowElement = document.createElement('div');
+            this.shadowElement.className = 'ui-element-shadow';
+            this.shadowElement.dataset.elementId = this.id;
+            this.shadowElement.dataset.type = 'shadow';
+            
+            // 插入到容器前面
+            if (this.domElement.parentNode) {
+                this.domElement.parentNode.insertBefore(this.shadowElement, this.domElement);
+            }
+        }
+        
+        const Scaler = window.Scaler;
+        if (!Scaler) {
+            console.error('Scaler未加载');
+            return;
+        }
+        
+        // 计算实际位置和尺寸
+        const actualPosition = Scaler.scalePosition(
+            this.config.basePosition.x,
+            this.config.basePosition.y
+        );
+        
+        const actualSize = Scaler.scaleSize(
+            this.config.baseSize.width,
+            this.config.baseSize.height
+        );
+        
+        // 计算阴影位置（向右下角偏移）
+        const actualOffsetX = Scaler.toActual(shadowConfig.offsetX || 0);
+        const actualOffsetY = Scaler.toActual(shadowConfig.offsetY || 0);
+        
+        // 设置阴影样式
+        this.shadowElement.style.position = 'fixed';
+        this.shadowElement.style.left = `${actualPosition.x + actualOffsetX}px`;
+        this.shadowElement.style.top = `${actualPosition.y + actualOffsetY}px`;
+        this.shadowElement.style.width = `${actualSize.width}px`;
+        this.shadowElement.style.height = `${actualSize.height}px`;
+        this.shadowElement.style.backgroundColor = shadowConfig.color || 'rgba(0, 0, 0, 0.5)';
+        this.shadowElement.style.opacity = shadowConfig.opacity || 0.7;
+        this.shadowElement.style.zIndex = (this.config.zIndex || 100) - 1; // 低于主层
+        this.shadowElement.style.pointerEvents = 'none'; // 阴影不响应鼠标事件
+        this.shadowElement.style.display = this.config.visible ? 'block' : 'none';
+    }
+    
+    /**
+     * 更新配置
+     * @param {Object} newConfig 新配置
+     */
+    update(newConfig) {
+        // 合并配置
+        this.config = { ...this.config, ...newConfig };
+        
+        // 重新应用样式
+        this.applyScale();
+        
+        // 如果有阴影配置，应用阴影
+        if (this.config.shadow) {
+            this.applyShadow(this.config.shadow);
+        }
+        
+        // 保存配置
+        this.saveConfig();
+    }
+    
+    /**
+     * 保存配置到本地存储
+     */
+    saveConfig() {
+        const Storage = window.Storage;
+        if (Storage) {
+            Storage.saveElementConfig(this.id, this.config);
+        }
+    }
+    
+    /**
+     * 从本地存储加载配置
+     */
+    loadConfig() {
+        const Storage = window.Storage;
+        if (Storage) {
+            const savedConfig = Storage.loadElementConfig(this.id, this.config);
+            this.config = { ...this.config, ...savedConfig };
+        }
+    }
+    
+    /**
+     * 显示元素
+     */
+    show() {
+        this.config.visible = true;
+        if (this.domElement) {
+            this.domElement.style.display = 'block';
+        }
+        if (this.shadowElement) {
+            this.shadowElement.style.display = 'block';
+        }
+        this.saveConfig();
+    }
+    
+    /**
+     * 隐藏元素
+     */
+    hide() {
+        this.config.visible = false;
+        if (this.domElement) {
+            this.domElement.style.display = 'none';
+        }
+        if (this.shadowElement) {
+            this.shadowElement.style.display = 'none';
+        }
+        this.saveConfig();
+    }
+    
+    /**
+     * 切换显示/隐藏
+     */
+    toggle() {
+        if (this.config.visible) {
+            this.hide();
+        } else {
+            this.show();
+        }
+    }
+    
+    /**
+     * 设置位置
+     * @param {number} x 基准X坐标
+     * @param {number} y 基准Y坐标
+     */
+    setPosition(x, y) {
+        this.config.basePosition = { x, y };
+        this.applyScale();
+        if (this.config.shadow) {
+            this.applyShadow(this.config.shadow);
+        }
+        this.saveConfig();
+    }
+    
+    /**
+     * 设置尺寸
+     * @param {number} width 基准宽度
+     * @param {number} height 基准高度
+     */
+    setSize(width, height) {
+        this.config.baseSize = { width, height };
+        this.applyScale();
+        if (this.config.shadow) {
+            this.applyShadow(this.config.shadow);
+        }
+        this.saveConfig();
+    }
+    
+    /**
+     * 设置阴影
+     * @param {number} offsetX X轴偏移
+     * @param {number} offsetY Y轴偏移
+     * @param {string} color 阴影颜色
+     * @param {number} opacity 阴影透明度
+     */
+    setShadow(offsetX, offsetY, color, opacity = 0.7) {
+        this.config.shadow = {
+            offsetX,
+            offsetY,
+            color,
+            opacity
+        };
+        this.applyShadow(this.config.shadow);
+        this.saveConfig();
+    }
+    
+    /**
+     * 移除阴影
+     */
+    removeShadow() {
+        if (this.shadowElement) {
+            this.shadowElement.remove();
+            this.shadowElement = null;
+        }
+        delete this.config.shadow;
+        this.saveConfig();
+    }
+    
+    /**
+     * 获取当前实际像素位置
+     * @returns {{x: number, y: number}} 实际位置
+     */
+    getActualPosition() {
+        const Scaler = window.Scaler;
+        if (!Scaler) return { x: 0, y: 0 };
+        
+        return Scaler.scalePosition(
+            this.config.basePosition.x,
+            this.config.basePosition.y
+        );
+    }
+    
+    /**
+     * 获取当前实际像素尺寸
+     * @returns {{width: number, height: number}} 实际尺寸
+     */
+    getActualSize() {
+        const Scaler = window.Scaler;
+        if (!Scaler) return { width: 0, height: 0 };
+        
+        return Scaler.scaleSize(
+            this.config.baseSize.width,
+            this.config.baseSize.height
+        );
+    }
+    
+    /**
+     * 销毁元素
+     */
+    destroy() {
+        if (this.domElement && this.domElement.parentNode) {
+            this.domElement.parentNode.removeChild(this.domElement);
+        }
+        if (this.shadowElement && this.shadowElement.parentNode) {
+            this.shadowElement.parentNode.removeChild(this.shadowElement);
+        }
+        this.domElement = null;
+        this.shadowElement = null;
+    }
+}
+
+// 导出UIElementBase类
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = UIElementBase;
+}

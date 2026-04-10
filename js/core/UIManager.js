@@ -1,0 +1,378 @@
+/**
+ * UI元素管理器
+ * 管理所有UI元素的创建、更新和销毁
+ */
+class UIManager {
+    /**
+     * 构造函数
+     */
+    constructor() {
+        this.elements = new Map(); // 存储所有UI元素实例
+        this.isResizing = false;
+        this.resizeTimer = null;
+        
+        // 绑定方法
+        this.handleResize = this.handleResize.bind(this);
+        this.updateAllElements = this.updateAllElements.bind(this);
+        
+        // 初始化
+        this.init();
+    }
+    
+    /**
+     * 初始化
+     */
+    init() {
+        // 监听窗口大小变化
+        window.addEventListener('resize', this.handleResize);
+        
+        // 加载已保存的配置
+        this.loadSavedConfig();
+    }
+    
+    /**
+     * 注册UI元素
+     * @param {Object} elementConfig 元素配置
+     * @param {string} elementConfig.id 元素ID
+     * @param {string} elementConfig.type 元素类型
+     * @returns {UIElementBase} 创建的UI元素实例
+     */
+    registerElement(elementConfig) {
+        const { id, type } = elementConfig;
+        
+        if (!id || !type) {
+            console.error('元素配置必须包含id和type');
+            return null;
+        }
+        
+        if (this.elements.has(id)) {
+            console.warn(`元素 ${id} 已存在，将替换`);
+            this.unregisterElement(id);
+        }
+        
+        let elementInstance;
+        
+        // 根据类型创建不同的UI元素实例
+        switch (type) {
+            case 'status-bar':
+                if (typeof StatusBarUI !== 'undefined') {
+                    elementInstance = new StatusBarUI(elementConfig);
+                } else {
+                    console.error('StatusBarUI 未加载');
+                    return null;
+                }
+                break;
+            // 未来可以添加更多类型
+            default:
+                if (typeof UIElementBase !== 'undefined') {
+                    elementInstance = new UIElementBase(elementConfig);
+                } else {
+                    console.error('UIElementBase 未加载');
+                    return null;
+                }
+                break;
+        }
+        
+        // 渲染元素
+        elementInstance.render();
+        
+        // 存储到Map中
+        this.elements.set(id, elementInstance);
+        
+        console.log(`已注册元素: ${id} (${type})`);
+        return elementInstance;
+    }
+    
+    /**
+     * 注销UI元素
+     * @param {string} elementId 元素ID
+     */
+    unregisterElement(elementId) {
+        if (this.elements.has(elementId)) {
+            const element = this.elements.get(elementId);
+            element.destroy();
+            this.elements.delete(elementId);
+            console.log(`已注销元素: ${elementId}`);
+        }
+    }
+    
+    /**
+     * 获取UI元素实例
+     * @param {string} elementId 元素ID
+     * @returns {UIElementBase|null} UI元素实例
+     */
+    getElement(elementId) {
+        return this.elements.get(elementId) || null;
+    }
+    
+    /**
+     * 更新UI元素配置
+     * @param {string} elementId 元素ID
+     * @param {Object} newConfig 新配置
+     */
+    updateElement(elementId, newConfig) {
+        const element = this.getElement(elementId);
+        if (element) {
+            element.update(newConfig);
+        } else {
+            console.warn(`元素 ${elementId} 不存在`);
+        }
+    }
+    
+    /**
+     * 更新所有UI元素
+     */
+    updateAllElements() {
+        this.elements.forEach(element => {
+            element.applyScale();
+            if (element.config.shadow) {
+                element.applyShadow(element.config.shadow);
+            }
+        });
+    }
+    
+    /**
+     * 处理窗口大小变化
+     */
+    handleResize() {
+        // 防抖处理，避免频繁重排
+        if (this.resizeTimer) {
+            clearTimeout(this.resizeTimer);
+        }
+        
+        this.isResizing = true;
+        
+        this.resizeTimer = setTimeout(() => {
+            this.updateAllElements();
+            this.isResizing = false;
+            console.log(`窗口大小变化: ${window.innerWidth}×${window.innerHeight}`);
+        }, 100);
+    }
+    
+    /**
+     * 渲染所有UI元素
+     */
+    renderAll() {
+        this.elements.forEach(element => {
+            if (element.domElement && !document.body.contains(element.domElement)) {
+                document.body.appendChild(element.domElement);
+            }
+        });
+    }
+    
+    /**
+     * 保存所有配置
+     */
+    saveAllConfig() {
+        const allConfig = {};
+        
+        this.elements.forEach((element, id) => {
+            allConfig[id] = element.config;
+        });
+        
+        if (typeof Storage !== 'undefined') {
+            Storage.saveConfig(allConfig);
+            console.log('已保存所有配置');
+        }
+    }
+    
+    /**
+     * 加载已保存的配置
+     */
+    loadSavedConfig() {
+        if (typeof Storage === 'undefined') {
+            console.warn('Storage 未加载，无法加载配置');
+            return;
+        }
+        
+        const savedConfig = (typeof Storage.loadConfig === 'function')
+            ? Storage.loadConfig()
+            : {};
+        
+        Object.keys(savedConfig).forEach(elementId => {
+            const config = savedConfig[elementId];
+            
+            // 如果元素已存在，更新配置
+            if (this.elements.has(elementId)) {
+                this.updateElement(elementId, config);
+            } else {
+                // 否则注册新元素
+                this.registerElement(config);
+            }
+        });
+        
+        console.log(`已加载 ${Object.keys(savedConfig).length} 个元素的配置`);
+    }
+    
+    /**
+     * 获取所有UI元素信息
+     * @returns {Array} 所有UI元素信息
+     */
+    getAllElementsInfo() {
+        const info = [];
+        
+        this.elements.forEach((element, id) => {
+            info.push({
+                id,
+                type: element.type,
+                visible: element.config.visible,
+                position: element.config.basePosition,
+                size: element.config.baseSize,
+                actualPosition: element.getActualPosition ? element.getActualPosition() : null,
+                actualSize: element.getActualSize ? element.getActualSize() : null,
+                hasShadow: !!element.config.shadow
+            });
+        });
+        
+        return info;
+    }
+    
+    /**
+     * 显示所有UI元素
+     */
+    showAll() {
+        this.elements.forEach(element => {
+            element.show();
+        });
+    }
+    
+    /**
+     * 隐藏所有UI元素
+     */
+    hideAll() {
+        this.elements.forEach(element => {
+            element.hide();
+        });
+    }
+    
+    /**
+     * 重置所有UI元素为默认配置
+     */
+    resetAll() {
+        this.elements.forEach(element => {
+            if (element.resetToDefault) {
+                element.resetToDefault();
+            }
+        });
+        
+        // 清除本地存储
+        if (typeof Storage !== 'undefined') {
+            Storage.clearAll();
+            console.log('已重置所有元素并清除配置');
+        }
+    }
+    
+    /**
+     * 导出所有配置
+     * @returns {Object} 所有UI元素的配置
+     */
+    exportAllConfig() {
+        const allConfig = {};
+        
+        this.elements.forEach((element, id) => {
+            allConfig[id] = element.exportConfig ? element.exportConfig() : element.config;
+        });
+        
+        return allConfig;
+    }
+    
+    /**
+     * 导入配置
+     * @param {Object} configs 配置对象
+     */
+    importConfig(configs) {
+        Object.keys(configs).forEach(elementId => {
+            const config = configs[elementId];
+            
+            if (this.elements.has(elementId)) {
+                const element = this.elements.get(elementId);
+                if (element.importConfig) {
+                    element.importConfig(config);
+                } else {
+                    element.update(config);
+                }
+            } else {
+                this.registerElement(config);
+            }
+        });
+        
+        console.log(`已导入 ${Object.keys(configs).length} 个元素的配置`);
+    }
+    
+    /**
+     * 批量更新元素属性
+     * @param {Array<string>} elementIds 元素ID数组
+     * @param {Object} updates 更新属性
+     */
+    batchUpdate(elementIds, updates) {
+        elementIds.forEach(elementId => {
+            const element = this.getElement(elementId);
+            if (element) {
+                element.update(updates);
+            }
+        });
+    }
+    
+    /**
+     * 获取当前缩放信息
+     * @returns {string} 缩放信息
+     */
+    getScaleInfo() {
+        if (typeof Scaler !== 'undefined') {
+            return Scaler.getScaleInfo();
+        }
+        return 'Scaler 未加载';
+    }
+    
+    /**
+     * 检查是否处于基准分辨率
+     * @returns {boolean} 是否处于基准分辨率
+     */
+    isBaseResolution() {
+        if (typeof Scaler !== 'undefined') {
+            return Scaler.isBaseResolution();
+        }
+        return false;
+    }
+    
+    /**
+     * 销毁所有UI元素
+     */
+    destroyAll() {
+        this.elements.forEach(element => {
+            element.destroy();
+        });
+        this.elements.clear();
+        
+        // 移除事件监听器
+        window.removeEventListener('resize', this.handleResize);
+        
+        console.log('已销毁所有UI元素');
+    }
+    
+    /**
+     * 获取管理器状态
+     * @returns {Object} 管理器状态
+     */
+    getStatus() {
+        return {
+            elementCount: this.elements.size,
+            isResizing: this.isResizing,
+            windowSize: {
+                width: window.innerWidth,
+                height: window.innerHeight
+            },
+            scaleInfo: this.getScaleInfo(),
+            isBaseResolution: this.isBaseResolution()
+        };
+    }
+}
+
+// 导出UIManager类
+// 统一导出模式：同时支持浏览器和Node.js环境
+if (typeof window !== 'undefined') {
+    window.UIManager = UIManager;
+}
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = UIManager;
+}

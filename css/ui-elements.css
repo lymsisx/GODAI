@@ -1,0 +1,147 @@
+/**
+ * UI元素样式
+ * 提供UI元素的公共样式定义
+ */
+
+/* UI元素通用样式 */
+.ui-element {
+    position: absolute;
+    z-index: 3;
+    border: 2px solid rgba(255, 0, 0, 0.3); /* 调试边框 */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-weight: bold;
+    font-size: 14px;
+    overflow: hidden;
+}
+
+/* UI元素容器（用于多层结构） */
+.ui-element-container {
+    position: fixed;
+    z-index: 3;
+}
+
+/* 调试模式下的高亮样式 */
+.debug-highlight {
+    border: 2px dashed #ff00ff !important;
+    background: rgba(255, 0, 255, 0.1) !important;
+}
+
+/* 选中状态 */
+.ui-element.selected {
+    border: 2px solid #4CAF50 !important;
+    box-shadow: 0 0 10px rgba(76, 175, 80, 0.5);
+}
+
+/* 悬停效果 */
+.ui-element:hover {
+    border-color: rgba(33, 150, 243, 0.7);
+}
+
+/* 状态栏特定样式 */
+#statusBar {
+    background: url('../assets/statusbar/default.png') no-repeat center center;
+    background-size: 100% 100%;
+}
+
+#statusBarShadow {
+    background: #333333;
+}
+
+/* 其他UI元素的默认样式 */
+#referenceDesktop {
+    background: rgba(255, 255, 255, 0.8);
+}
+
+#buttons {
+    background: rgba(255, 182, 193, 0.7);
+}
+
+#chatBox {
+    background: rgba(255, 255, 255, 0.95);
+}
+
+#popupTip {
+    background: rgba(255, 255, 255, 0.8);
+}
+
+#floatWindow1 {
+    background: rgba(255, 255, 255, 0.8);
+}
+
+#moodUI {
+    background: rgba(255, 192, 203, 0.9);
+    border-radius: 50%;
+}
+
+/* 编辑面板样式 */
+#editPanel {
+    position: fixed;
+    top: 80px;
+    right: 20px;
+    background: rgba(0, 0, 0, 0.9);
+    color: white;
+    padding: 20px;
+    border-radius: 10px;
+    z-index: 1000;
+    display: none;
+    width: 320px;
+    max-height: 80vh;
+    overflow-y: auto;
+}
+
+.control-group {
+    margin: 10px 0;
+    padding: 10px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 5px;
+}
+
+.btn {
+    background: #4CAF50;
+    color: white;
+    border: none;
+    padding: 8px 12px;
+    margin: 3px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+}
+
+.btn:hover {
+    background: #45a049;
+}
+
+.reset-all-btn {
+    background: #f44336;
+    color: white;
+    border: none;
+    padding: 12px 20px;
+    margin: 10px 0 0 0;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: bold;
+    width: 100%;
+    font-size: 14px;
+}
+
+.reset-all-btn:hover {
+    background: #da190b;
+}
+
+/* 缩放信息显示 */
+#scaleInfo {
+    position: fixed;
+    bottom: 10px;
+    right: 10px;
+    background: rgba(0, 0, 0, 0.8);
+    color: white;
+    padding: 8px 12px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-family: monospace;
+    z-index: 9999;
+    max-width: 300px;
+    white-space: pre-line;
+}

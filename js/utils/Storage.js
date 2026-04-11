@@ -193,10 +193,10 @@ class Storage {
     }
 }
 
-// 导出Storage类
+// 导出UIStorageManager类
 // 统一导出模式：同时支持浏览器和Node.js环境
 if (typeof window !== 'undefined') {
-    window.Storage = Storage;
+    window.UIStorageManager = Storage;  // 类名是 Storage，导出为 UIStorageManager
 }
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = Storage;

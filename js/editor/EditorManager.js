@@ -278,6 +278,14 @@ class EditorManager {
     selectElement(elementId) {
         console.log(`🎯 选择编辑元素: ${elementId}`);
         
+        // 清除旧选中元素的高亮
+        if (this.currentElementId && this.currentElementId !== elementId) {
+            const prevElement = this.app.uiManager.elements.get(this.currentElementId);
+            if (prevElement && typeof prevElement.deselect === 'function') {
+                prevElement.deselect();
+            }
+        }
+        
         // 更新当前选中元素
         this.currentElementId = elementId;
         
@@ -289,6 +297,11 @@ class EditorManager {
         if (!uiElement) {
             console.error(`❌ 找不到元素: ${elementId}`);
             return;
+        }
+        
+        // 高亮选中元素
+        if (typeof uiElement.select === 'function') {
+            uiElement.select();
         }
         
         // 获取或创建编辑器
@@ -370,6 +383,11 @@ class EditorManager {
      */
     exitEditMode() {
         if (this.isEditMode) {
+            // 清除选中高亮
+            if (this.currentElementId && this.app.uiManager) {
+                const el = this.app.uiManager.elements.get(this.currentElementId);
+                if (el && typeof el.deselect === 'function') el.deselect();
+            }
             this.toggleEditMode();
         }
     }

@@ -36,7 +36,7 @@ class AppStarter {
             // 4. 导出全局变量供调试
             window.App = app;
             window.Scaler = Scaler;
-            window.Storage = Storage;
+            // UIStorageManager 已在 Storage.js 中通过 window.UIStorageManager = Storage 导出，无需重复赋值
             
             // 5. 显示欢迎信息
             this._showWelcome();

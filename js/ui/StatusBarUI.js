@@ -98,8 +98,8 @@ class StatusBarUI extends UIElementBase {
             this.applyShadow(this.config.shadow);
         }
         
-        // 从本地存储加载保存的配置
-        this.loadConfig();
+        // 注意：父类构造函数已经调用 _loadSavedConfig() 加载配置
+        // 这里不需要再调用 loadConfig()，避免重复加载
     }
     
     /**

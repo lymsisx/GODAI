@@ -708,29 +708,21 @@ class UIElementEditor {
             ? this.uiElement.getConfig()
             : this.config;
         
-        // 保存到localStorage
-        const fullConfig = {
-            uiElements: {},
-            lastModified: new Date().toISOString()
-        };
-        
-        // 加载现有配置
-        const existingConfigStr = localStorage.getItem('ui_elements_config');
-        if (existingConfigStr) {
-            try {
-                const existingConfig = JSON.parse(existingConfigStr);
-                fullConfig.uiElements = existingConfig.uiElements || {};
-            } catch (e) {
-                console.warn('⚠️ 解析现有UI元素配置失败:', e);
-            }
+        // 先应用到元素
+        if (this.uiElement && typeof this.uiElement.update === 'function') {
+            this.uiElement.update(finalConfig);
         }
         
-        // 更新当前元素的配置
-        fullConfig.uiElements[this.config.id] = finalConfig;
-        
-        localStorage.setItem('ui_elements_config', JSON.stringify(fullConfig));
-        console.log('💾 UI元素配置已保存，元素ID:', this.config.id, '配置:', fullConfig);
-        alert(`UI元素 "${this.config.id}" 配置已保存！`);
+        // 统一使用 UIStorageManager 模块保存（不再直接操作 localStorage）
+        const UIStorageManager = window.UIStorageManager;
+        if (UIStorageManager && typeof UIStorageManager.saveElementConfig === 'function') {
+            UIStorageManager.saveElementConfig(this.config.id, finalConfig);
+            console.log('💾 UI元素配置已保存，元素ID:', this.config.id);
+            alert(`UI元素 "${this.config.id}" 配置已保存！刷新后将自动恢复。`);
+        } else {
+            console.error('❌ UIStorageManager 模块不可用，无法保存配置');
+            alert('保存失败：UIStorageManager模块不可用');
+        }
     }
 
     /**
@@ -763,18 +755,13 @@ class UIElementEditor {
             // 应用更改
             this.uiElement.update(defaultConfig);
             
-            // 从localStorage中移除该元素的配置
-            const existingConfigStr = localStorage.getItem('ui_elements_config');
-            if (existingConfigStr) {
-                try {
-                    const existingConfig = JSON.parse(existingConfigStr);
-                    if (existingConfig.uiElements && existingConfig.uiElements[this.config.id]) {
-                        delete existingConfig.uiElements[this.config.id];
-                        localStorage.setItem('ui_elements_config', JSON.stringify(existingConfig));
-                    }
-                } catch (e) {
-                    console.warn('⚠️ 重置时处理现有配置失败:', e);
-                }
+            // 从UIStorageManager中移除该元素的配置
+            const UIStorageManager = window.UIStorageManager;
+            if (UIStorageManager && typeof UIStorageManager.saveElementConfig === 'function') {
+                // 加载全部配置，删除当前元素，重新保存
+                const allConfig = UIStorageManager.loadConfig() || {};
+                delete allConfig[this.config.id];
+                UIStorageManager.saveConfig(allConfig);
             }
             
             console.log('🔄 UI元素已重置到默认值，元素ID:', this.config.id);

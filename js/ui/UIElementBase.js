@@ -32,6 +32,49 @@ class UIElementBase {
         
         // 合并配置
         this.config = { ...this.defaultConfig, ...config };
+        
+        // 从Storage加载已保存配置（在渲染前）
+        this._loadSavedConfig();
+    }
+    
+    /**
+     * 从Storage加载已保存配置（私有方法）
+     * 处理扁平配置转换为嵌套配置
+     */
+    _loadSavedConfig() {
+        try {
+            const UIStorageManager = window.UIStorageManager;
+            if (UIStorageManager && typeof UIStorageManager.loadElementConfig === 'function') {
+                const savedConfig = UIStorageManager.loadElementConfig(this.id, null);
+                if (savedConfig && typeof savedConfig === 'object' && Object.keys(savedConfig).length > 0) {
+                    // 处理扁平配置转换为嵌套配置
+                    if (savedConfig.x !== undefined && savedConfig.y !== undefined) {
+                        this.config.basePosition = { x: savedConfig.x, y: savedConfig.y };
+                    }
+                    if (savedConfig.width !== undefined && savedConfig.height !== undefined) {
+                        this.config.baseSize = { width: savedConfig.width, height: savedConfig.height };
+                    }
+                    if (savedConfig.shadow) {
+                        this.config.shadow = savedConfig.shadow;
+                    }
+                    if (savedConfig.zIndex !== undefined) {
+                        this.config.zIndex = savedConfig.zIndex;
+                    }
+                    if (savedConfig.visible !== undefined) {
+                        this.config.visible = savedConfig.visible;
+                    }
+                    if (savedConfig.image !== undefined) {
+                        this.config.image = savedConfig.image;
+                    }
+                    if (savedConfig.objectFit !== undefined) {
+                        this.config.objectFit = savedConfig.objectFit;
+                    }
+                    console.log(`📂 已从UIStorageManager加载元素 ${this.id} 的配置`);
+                }
+            }
+        } catch (error) {
+            console.warn('⚠️ 构造时配置加载失败:', error.message);
+        }
     }
     
     /**
@@ -256,9 +299,9 @@ class UIElementBase {
      */
     saveConfig() {
         try {
-            const Storage = window.Storage;
-            if (Storage && typeof Storage.saveElementConfig === 'function') {
-                Storage.saveElementConfig(this.id, this.config);
+            const UIStorageManager = window.UIStorageManager;
+            if (UIStorageManager && typeof UIStorageManager.saveElementConfig === 'function') {
+                UIStorageManager.saveElementConfig(this.id, this.config);
             }
         } catch (error) {
             console.warn('⚠️ 配置保存失败（存储模块可能未就绪）:', error.message);
@@ -270,9 +313,9 @@ class UIElementBase {
      */
     loadConfig() {
         try {
-            const Storage = window.Storage;
-            if (Storage && typeof Storage.loadElementConfig === 'function') {
-                const savedConfig = Storage.loadElementConfig(this.id, this.config);
+            const UIStorageManager = window.UIStorageManager;
+            if (UIStorageManager && typeof UIStorageManager.loadElementConfig === 'function') {
+                const savedConfig = UIStorageManager.loadElementConfig(this.id, this.config);
                 if (savedConfig && typeof savedConfig === 'object') {
                     this.config = { ...this.config, ...savedConfig };
                 }

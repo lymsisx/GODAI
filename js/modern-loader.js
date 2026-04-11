@@ -15,8 +15,8 @@ class ModernModuleLoader {
     // 模块依赖图（仅包含真正的模块，initApp是全局函数不是模块）
     static dependencies = {
         'Scaler': [],
-        'Storage': [],
-        'UIElementBase': ['Scaler', 'Storage'],
+        'UIStorageManager': [],
+        'UIElementBase': ['Scaler', 'UIStorageManager'],
         'StatusBarUI': ['UIElementBase', 'Scaler'],
         'UIManager': ['UIElementBase', 'StatusBarUI'],
         'StatusBarEditor': ['StatusBarUI', 'UIManager'],
@@ -28,7 +28,7 @@ class ModernModuleLoader {
     // 模块配置（路径基于HTML的base URL即GODAI/目录）
     static moduleConfig = [
         { path: 'js/utils/Scaler.js', name: 'Scaler', exportName: 'Scaler' },
-        { path: 'js/utils/Storage.js', name: 'Storage', exportName: 'Storage' },
+        { path: 'js/utils/Storage.js', name: 'UIStorageManager', exportName: 'UIStorageManager' },
         { path: 'js/ui/UIElementBase.js', name: 'UIElementBase', exportName: 'UIElementBase' },
         { path: 'js/ui/StatusBarUI.js', name: 'StatusBarUI', exportName: 'StatusBarUI' },
         { path: 'js/core/UIManager.js', name: 'UIManager', exportName: 'UIManager' },
@@ -168,7 +168,7 @@ class ModernModuleLoader {
             console.error(`❌ 模块加载失败: ${moduleName}`, error);
             
             // 对于非关键模块，继续加载其他模块
-            const isCritical = ['Scaler', 'Storage', 'UIElementBase'].includes(moduleName);
+            const isCritical = ['Scaler', 'UIStorageManager', 'UIElementBase'].includes(moduleName);
             if (isCritical) {
                 throw error;
             } else {
@@ -239,6 +239,10 @@ class ModernModuleLoader {
         // 检查全局变量
         const globalVar = window[moduleInfo.exportName];
         if (globalVar !== undefined) {
+            // 额外验证：对于 UIStorageManager，检查是否有 PREFIX 属性（我们自己的模块特征）
+            if (moduleName === 'UIStorageManager' && typeof globalVar.PREFIX !== 'string') {
+                return false; // 是浏览器内置 API，不是我们自定义的模块
+            }
             return true;
         }
         

@@ -138,32 +138,18 @@ class App {
      */
     async _loadConfig() {
         try {
-            // 安全加载：Storage 模块可能未就绪
-            const savedConfig = (typeof Storage !== 'undefined' && typeof Storage.loadConfig === 'function')
-                ? Storage.loadConfig(null)
+            // 安全加载：UIStorageManager 模块可能未就绪
+            const savedConfig = (typeof UIStorageManager !== 'undefined' && typeof UIStorageManager.loadConfig === 'function')
+                ? UIStorageManager.loadConfig(null)
                 : null;
             
             if (savedConfig && savedConfig.statusBar) {
                 console.log('📂 加载已保存的状态栏配置:', savedConfig.statusBar);
-                // 配置会在StatusBarUI创建时通过loadConfig()应用
+                // 配置会在StatusBarUI创建时通过_loadSavedConfig()应用
             } else {
-                console.log('📂 使用默认配置');
-                // 创建默认配置（使用正确的存储结构）
-                const defaultConfig = {
-                    x: 280,
-                    y: 20,
-                    width: 2000,
-                    height: 200,
-                    shadow: {
-                        offsetX: 4,
-                        offsetY: 4,
-                        color: '#333333'
-                    }
-                };
-                // 保存到正确的存储位置（ui_preview_config -> statusBar键）
-                if (typeof Storage !== 'undefined' && typeof Storage.saveElementConfig === 'function') {
-                    Storage.saveElementConfig('statusBar', defaultConfig);
-                }
+                console.log('📂 使用默认配置（首次运行）');
+                // 注意：不再写入默认配置到存储，避免覆盖用户自定义配置
+                // 默认配置由各组件的 defaultConfig 提供
             }
             
         } catch (error) {
@@ -285,7 +271,7 @@ class App {
                 height: window.innerHeight
             },
             uiElements: this.uiManager ? this.uiManager.elements.size : 0,
-            configLoaded: !!Storage.load('ui_statusbar_config', null)
+            configLoaded: !!(window.UIStorageManager && window.UIStorageManager.load('ui_statusbar_config', null))
         };
     }
 
@@ -295,7 +281,9 @@ class App {
     reset() {
         if (confirm('确定要重置所有配置吗？这将清除所有自定义设置。')) {
             // 清除本地存储
-            Storage.remove('ui_statusbar_config');
+            if (window.UIStorageManager && typeof window.UIStorageManager.remove === 'function') {
+                window.UIStorageManager.remove('ui_statusbar_config');
+            }
             
             // 重新加载页面
             window.location.reload();

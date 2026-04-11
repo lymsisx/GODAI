@@ -170,8 +170,8 @@ class UIManager {
             allConfig[id] = element.config;
         });
         
-        if (typeof Storage !== 'undefined') {
-            Storage.saveConfig(allConfig);
+        if (typeof UIStorageManager !== 'undefined') {
+            UIStorageManager.saveConfig(allConfig);
             console.log('已保存所有配置');
         }
     }
@@ -180,13 +180,13 @@ class UIManager {
      * 加载已保存的配置
      */
     loadSavedConfig() {
-        if (typeof Storage === 'undefined') {
-            console.warn('Storage 未加载，无法加载配置');
+        if (typeof UIStorageManager === 'undefined') {
+            console.warn('UIStorageManager 未加载，无法加载配置');
             return;
         }
         
-        const savedConfig = (typeof Storage.loadConfig === 'function')
-            ? Storage.loadConfig()
+        const savedConfig = (typeof UIStorageManager.loadConfig === 'function')
+            ? UIStorageManager.loadConfig()
             : {};
         
         Object.keys(savedConfig).forEach(elementId => {
@@ -256,8 +256,8 @@ class UIManager {
         });
         
         // 清除本地存储
-        if (typeof Storage !== 'undefined') {
-            Storage.clearAll();
+        if (typeof UIStorageManager !== 'undefined') {
+            UIStorageManager.clearAll();
             console.log('已重置所有元素并清除配置');
         }
     }

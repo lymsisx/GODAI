@@ -522,15 +522,21 @@ class StatusBarEditor {
             ? this.statusBar.getConfig()
             : this.config;
         
-        // 保存到localStorage
-        const fullConfig = {
-            statusBar: finalConfig,
-            lastModified: new Date().toISOString()
-        };
+        // 先应用到元素
+        if (this.statusBar && typeof this.statusBar.update === 'function') {
+            this.statusBar.update(finalConfig);
+        }
         
-        Storage.save('ui_statusbar_config', fullConfig);
-        console.log('💾 状态栏配置已保存:', fullConfig);
-        alert('状态栏配置已保存！');
+        // 统一使用 saveElementConfig 保存（与 UIElementEditor 保持一致）
+        const SM = window.UIStorageManager;
+        if (SM && typeof SM.saveElementConfig === 'function') {
+            SM.saveElementConfig('statusBar', finalConfig);
+            console.log('💾 状态栏配置已保存:', finalConfig);
+            alert('状态栏配置已保存！');
+        } else {
+            console.error('❌ UIStorageManager 模块不可用，无法保存状态栏配置');
+            alert('保存失败：UIStorageManager 模块不可用');
+        }
     }
 
     /**
@@ -569,8 +575,13 @@ class StatusBarEditor {
             // 应用更改
             this.statusBar.update(defaultConfig);
             
-            // 从localStorage中移除配置
-            Storage.remove('ui_statusbar_config');
+            // 从localStorage中移除配置（改用 saveElementConfig 的反向操作）
+            const SM = window.UIStorageManager;
+            if (SM && typeof SM.loadConfig === 'function') {
+                const allConfig = SM.loadConfig() || {};
+                delete allConfig['statusBar'];
+                SM.saveConfig(allConfig);
+            }
             
             console.log('🔄 状态栏已重置到默认值');
             alert('状态栏已重置到默认设置！');

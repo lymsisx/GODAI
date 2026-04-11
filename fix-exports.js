@@ -17,8 +17,8 @@ const JS_FILES = [
     },
     {
         file: 'js/utils/Storage.js',
-        className: 'Storage',
-        exportsToAdd: ['window.Storage = Storage;']
+        className: 'StorageManager',
+        exportsToAdd: ['window.StorageManager = StorageManager;']
     },
     {
         file: 'js/ui/UIElementBase.js',

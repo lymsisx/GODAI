@@ -40,6 +40,7 @@ class UIElementBase {
     /**
      * 从Storage加载已保存配置（私有方法）
      * 处理扁平配置转换为嵌套配置
+     * 注意：图片从 IndexedDB 异步加载，加载完成后自动更新 img.src
      */
     _loadSavedConfig() {
         try {
@@ -63,17 +64,81 @@ class UIElementBase {
                     if (savedConfig.visible !== undefined) {
                         this.config.visible = savedConfig.visible;
                     }
-                    if (savedConfig.image !== undefined) {
-                        this.config.image = savedConfig.image;
-                    }
                     if (savedConfig.objectFit !== undefined) {
                         this.config.objectFit = savedConfig.objectFit;
                     }
+                    if (savedConfig.name !== undefined) {
+                        this.config.name = savedConfig.name;
+                    }
+                    if (savedConfig.backgroundColor !== undefined) {
+                        this.config.backgroundColor = savedConfig.backgroundColor;
+                    }
+
+                    // 图片加载优先级：IndexedDB > localStorage 旧 key > config.image 旧字段
+                    const tryLoadImage = async () => {
+                        // 1. 尝试 IndexedDB（新方案，无大小限制）
+                        if (typeof UIStorageManager.loadImageAsync === 'function') {
+                            const idbImage = await UIStorageManager.loadImageAsync(this.id);
+                            if (idbImage) {
+                                this._applyRestoredImage(idbImage);
+                                return;
+                            }
+                        }
+                        // 2. 回退：尝试 localStorage 独立 key（上一版遗留数据）
+                        if (typeof UIStorageManager.loadImage === 'function') {
+                            const lsImage = UIStorageManager.loadImage(this.id);
+                            if (lsImage) {
+                                this._applyRestoredImage(lsImage);
+                                // 顺手迁移到 IndexedDB，并清除旧 key
+                                if (typeof UIStorageManager.saveImageAsync === 'function') {
+                                    UIStorageManager.saveImageAsync(this.id, lsImage).then(() => {
+                                        try { localStorage.removeItem('ui_preview_image_' + this.id); } catch (_) {}
+                                    });
+                                }
+                                return;
+                            }
+                        }
+                        // 3. 回退：config.image 旧字段（更早版本遗留数据）
+                        if (savedConfig.image) {
+                            this._applyRestoredImage(savedConfig.image);
+                        }
+                    };
+
+                    tryLoadImage().catch(err => console.warn('⚠️ 图片恢复失败:', err));
+
                     console.log(`📂 已从UIStorageManager加载元素 ${this.id} 的配置`);
                 }
             }
         } catch (error) {
             console.warn('⚠️ 构造时配置加载失败:', error.message);
+        }
+    }
+
+    /**
+     * 将恢复的图片 DataURL 应用到元素（供 _loadSavedConfig 异步回调使用）
+     * @param {string} dataUrl
+     * @private
+     */
+    _applyRestoredImage(dataUrl) {
+        this.config.image = dataUrl;
+        // 如果 DOM 已渲染，直接更新 img.src（异步加载完成时 DOM 可能已存在）
+        if (this.imageElement) {
+            this.imageElement.src = dataUrl;
+        } else if (this.domElement) {
+            // 尚无 img 节点，就地挂载
+            const img = document.createElement('img');
+            img.className = 'generic-ui-image';
+            img.src = dataUrl;
+            img.alt = this.config.name || this.id;
+            img.draggable = false;
+            img.style.width = '100%';
+            img.style.height = '100%';
+            img.style.objectFit = this.config.objectFit || 'cover';
+            img.style.pointerEvents = 'none';
+            if (this.textElement) { this.textElement.remove(); this.textElement = null; }
+            this.domElement.appendChild(img);
+            this.imageElement = img;
+            this.domElement.style.backgroundColor = 'transparent';
         }
     }
     
@@ -102,8 +167,10 @@ class UIElementBase {
             this.imageElement.className = 'generic-ui-image';
             this.imageElement.src = imageSrc;
             this.imageElement.alt = this.config.name || this.id;
+            this.imageElement.draggable = false; // 禁止浏览器原生图片拖拽
             this.imageElement.style.width = '100%';
             this.imageElement.style.height = '100%';
+            this.imageElement.style.pointerEvents = 'none'; // 点击穿透到 container，保证自定义拖拽
             this.imageElement.style.objectFit = this.config.objectFit || 'cover';
             container.appendChild(this.imageElement);
             console.log(`📸 添加图片: ${imageSrc}`);
@@ -148,8 +215,8 @@ class UIElementBase {
         // 将容器添加到body
         document.body.appendChild(container);
         
-        // 保存配置
-        this.saveConfig();
+        // 注意：render() 不主动调用 saveConfig()
+        // 配置保存由用户操作（拖拽、编辑、上传图片）触发，避免注册时触发存图炸 localStorage
         
         console.log(`✅ 元素 ${this.id} 渲染完成`);
     }
@@ -296,12 +363,33 @@ class UIElementBase {
     
     /**
      * 保存配置到本地存储
+     * 图片 base64 走 IndexedDB（无大小限制），其他配置走 localStorage。
      */
     saveConfig() {
         try {
             const UIStorageManager = window.UIStorageManager;
             if (UIStorageManager && typeof UIStorageManager.saveElementConfig === 'function') {
-                UIStorageManager.saveElementConfig(this.id, this.config);
+                // 剥离 image 字段，config 对象只存非图片数据到 localStorage
+                const imageDataUrl = this.config.image;
+                const configToSave = { ...this.config };
+                delete configToSave.image;
+                UIStorageManager.saveElementConfig(this.id, configToSave);
+
+                // 图片走 IndexedDB（异步，不阻塞）
+                if (typeof UIStorageManager.saveImageAsync === 'function') {
+                    if (imageDataUrl) {
+                        UIStorageManager.saveImageAsync(this.id, imageDataUrl).catch(err => {
+                            console.warn('⚠️ IndexedDB 存图失败:', err);
+                        });
+                    } else {
+                        // 清除图片时同步删除 IndexedDB 记录
+                        if (typeof UIStorageManager.removeImageAsync === 'function') {
+                            UIStorageManager.removeImageAsync(this.id).catch(() => {});
+                        }
+                        // 兼容：也清除旧的 localStorage 独立 key
+                        try { localStorage.removeItem('ui_preview_image_' + this.id); } catch (_) {}
+                    }
+                }
             }
         } catch (error) {
             console.warn('⚠️ 配置保存失败（存储模块可能未就绪）:', error.message);
@@ -397,22 +485,63 @@ class UIElementBase {
      * @param {string} imageSrc 图片URL或DataURL
      */
     updateImage(imageSrc) {
-        console.log(`🖼️ 更新元素 ${this.id} 的图片:`, imageSrc ? imageSrc.substring(0, 50) + '...' : '空');
+        console.log(`🖼️ 更新元素 ${this.id} 的图片:`, imageSrc ? imageSrc.substring(0, 50) + '...' : '空（清除）');
         
-        // 更新配置
-        this.config.image = imageSrc;
-        
-        // 更新DOM
-        if (this.imageElement) {
+        this.config.image = imageSrc || null;
+
+        if (!imageSrc) {
+            // 清除图片：移除 img 节点，显示 backgroundColor
+            if (this.imageElement) {
+                this.imageElement.remove();
+                this.imageElement = null;
+            }
+            // 还原为配置的背景色，默认粉色
+            if (!this.config.backgroundColor || this.config.backgroundColor === 'transparent') {
+                this.config.backgroundColor = '#ff6b9d';
+            }
+            if (this.domElement) {
+                this.domElement.style.backgroundColor = this.config.backgroundColor;
+            }
+        } else if (this.imageElement) {
+            // 已有 img 节点，直接换 src
             this.imageElement.src = imageSrc;
+            this.config.backgroundColor = 'transparent';
+            if (this.domElement) {
+                this.domElement.style.backgroundColor = 'transparent';
+            }
         } else {
-            // 如果没有图片元素，重新渲染
-            this.render();
+            // 尚无 img 节点：就地创建并挂到现有 container，不重建 DOM（避免拖拽事件丢失）
+            this.config.backgroundColor = 'transparent';
+            if (this.domElement) {
+                this.domElement.style.backgroundColor = 'transparent';
+                const img = document.createElement('img');
+                img.className = 'generic-ui-image';
+                img.src = imageSrc;
+                img.alt = this.config.name || this.id;
+                img.draggable = false;
+                img.style.width = '100%';
+                img.style.height = '100%';
+                img.style.objectFit = this.config.objectFit || 'cover';
+                img.style.pointerEvents = 'none';
+                // 移除旧的占位文字（如果有）
+                if (this.textElement) {
+                    this.textElement.remove();
+                    this.textElement = null;
+                }
+                this.domElement.appendChild(img);
+                this.imageElement = img;
+                console.log(`📸 就地挂载图片节点: ${this.id}`);
+            } else {
+                // domElement 尚未创建，走完整渲染流程
+                this.render();
+            }
         }
         
-        // 保存配置
         this.saveConfig();
-        
+
+        // 同步自定义组件列表中的 image/backgroundColor（上传图片后持久化）
+        this._syncCustomElementImage();
+
         console.log(`✅ 元素 ${this.id} 图片更新完成`);
     }
     
@@ -474,6 +603,266 @@ class UIElementBase {
         );
     }
     
+    // ─────────────────────────────────────────────
+    // 拖动系统
+    // ─────────────────────────────────────────────
+
+    /**
+     * 启用拖动（编辑模式下由 EditorManager 调用）
+     */
+    enableDrag() {
+        if (this._dragEnabled) return;
+        this._dragEnabled = true;
+        this._isDragging = false;
+        this._dragStartMouseX = 0;
+        this._dragStartMouseY = 0;
+        this._dragStartLeft = 0;
+        this._dragStartTop = 0;
+
+        // 阻止浏览器原生拖拽（img/a 等元素的默认 drag 行为）
+        this._onDragStart = (e) => { e.preventDefault(); };
+        this.domElement.addEventListener('dragstart', this._onDragStart);
+        // 阻止文本选择干扰
+        this._onSelectStart = (e) => { e.preventDefault(); };
+        this.domElement.addEventListener('selectstart', this._onSelectStart);
+
+        this._onMouseDown = (e) => {
+            if (e.button !== 0) return;
+            e.preventDefault();
+            e.stopPropagation();
+
+            this._isDragging = true;
+            this._dragStartMouseX = e.clientX;
+            this._dragStartMouseY = e.clientY;
+            this._dragStartLeft = parseFloat(this.domElement.style.left) || 0;
+            this._dragStartTop  = parseFloat(this.domElement.style.top)  || 0;
+
+            // 拖动中样式
+            this.domElement.style.cursor = 'grabbing';
+            this.domElement.style.userSelect = 'none';
+            this.domElement.style.zIndex = String((parseInt(this.config.zIndex) || 100) + 5000);
+
+            document.addEventListener('mousemove', this._onMouseMove);
+            document.addEventListener('mouseup',   this._onMouseUp);
+        };
+
+        this._onMouseMove = (e) => {
+            if (!this._isDragging) return;
+            const dx = e.clientX - this._dragStartMouseX;
+            const dy = e.clientY - this._dragStartMouseY;
+            this.domElement.style.left = `${this._dragStartLeft + dx}px`;
+            this.domElement.style.top  = `${this._dragStartTop  + dy}px`;
+
+            // 同步阴影
+            if (this.shadowElement) {
+                const Scaler = window.Scaler;
+                const ox = Scaler ? Scaler.toActual(this.config.shadow?.offsetX || 0) : 0;
+                const oy = Scaler ? Scaler.toActual(this.config.shadow?.offsetY || 0) : 0;
+                this.shadowElement.style.left = `${this._dragStartLeft + dx + ox}px`;
+                this.shadowElement.style.top  = `${this._dragStartTop  + dy + oy}px`;
+            }
+        };
+
+        this._onMouseUp = () => {
+            if (!this._isDragging) return;
+            this._isDragging = false;
+
+            // 恢复样式
+            this.domElement.style.cursor = 'grab';
+            this.domElement.style.userSelect = '';
+            this.domElement.style.zIndex = String(this.config.zIndex || 100);
+
+            // 将实际像素坐标反算为基准坐标
+            const actualLeft = parseFloat(this.domElement.style.left) || 0;
+            const actualTop  = parseFloat(this.domElement.style.top)  || 0;
+            const Scaler = window.Scaler;
+            if (Scaler && typeof Scaler.toBase === 'function') {
+                this.config.basePosition = {
+                    x: Scaler.toBase(actualLeft),
+                    y: Scaler.toBase(actualTop)
+                };
+            }
+
+            // 持久化
+            this.saveConfig();
+
+            // 同步自定义组件列表中的 x/y
+            this._syncCustomElementPosition();
+
+            // 通知编辑器面板刷新
+            this.domElement.dispatchEvent(new CustomEvent('ui-element-dragged', {
+                bubbles: true,
+                detail: {
+                    id: this.id,
+                    x: this.config.basePosition.x,
+                    y: this.config.basePosition.y
+                }
+            }));
+
+            document.removeEventListener('mousemove', this._onMouseMove);
+            document.removeEventListener('mouseup',   this._onMouseUp);
+        };
+
+        this.domElement.addEventListener('mousedown', this._onMouseDown);
+        this.domElement.style.cursor = 'grab';
+    }
+
+    /**
+     * 禁用拖动
+     */
+    disableDrag() {
+        if (!this._dragEnabled) return;
+        this._dragEnabled = false;
+        if (this._onMouseDown) {
+            this.domElement.removeEventListener('mousedown', this._onMouseDown);
+        }
+        if (this._onDragStart) {
+            this.domElement.removeEventListener('dragstart', this._onDragStart);
+        }
+        if (this._onSelectStart) {
+            this.domElement.removeEventListener('selectstart', this._onSelectStart);
+        }
+        document.removeEventListener('mousemove', this._onMouseMove);
+        document.removeEventListener('mouseup',   this._onMouseUp);
+        this._onMouseDown = null;
+        this._onMouseMove = null;
+        this._onMouseUp   = null;
+        this._onDragStart = null;
+        this._onSelectStart = null;
+        if (this.domElement) {
+            this.domElement.style.cursor = '';
+        }
+    }
+
+
+    /**
+     * 选中高亮（编辑模式）
+     */
+    select() {
+        if (this.domElement) {
+            // 发光边框（box-shadow 不受 overflow 裁切，比 outline 更可靠）
+            this.domElement.style.boxShadow = '0 0 0 2px #4CAF50, 0 0 12px 3px rgba(76, 175, 80, 0.6)';
+            this.domElement.style.outline = 'none';
+
+            // 创建选中角点层（4个角点 + 顶部标签）
+            if (!this._selectOverlay) {
+                this._selectOverlay = document.createElement('div');
+                this._selectOverlay.style.cssText = `
+                    position: absolute;
+                    inset: 0;
+                    pointer-events: none;
+                    z-index: 9999;
+                `;
+
+                // 4个角点
+                const corners = [
+                    { top: '-4px', left: '-4px' },
+                    { top: '-4px', right: '-4px' },
+                    { bottom: '-4px', left: '-4px' },
+                    { bottom: '-4px', right: '-4px' }
+                ];
+                corners.forEach(pos => {
+                    const dot = document.createElement('div');
+                    dot.style.cssText = `
+                        position: absolute;
+                        width: 8px;
+                        height: 8px;
+                        background: #4CAF50;
+                        border: 2px solid white;
+                        border-radius: 50%;
+                        box-shadow: 0 0 4px rgba(0,0,0,0.5);
+                    `;
+                    Object.assign(dot.style, pos);
+                    this._selectOverlay.appendChild(dot);
+                });
+
+                // 顶部标签条
+                const label = document.createElement('div');
+                label.textContent = this.config.name || this.id;
+                label.style.cssText = `
+                    position: absolute;
+                    top: -22px;
+                    left: -2px;
+                    background: #4CAF50;
+                    color: white;
+                    font-size: 11px;
+                    font-weight: bold;
+                    padding: 1px 6px;
+                    border-radius: 3px 3px 0 0;
+                    white-space: nowrap;
+                    line-height: 18px;
+                    box-shadow: 0 -2px 6px rgba(76,175,80,0.4);
+                    font-family: monospace;
+                `;
+                this._selectOverlay.appendChild(label);
+
+                this.domElement.style.position = 'fixed';
+                this.domElement.style.overflow = 'visible';
+                this.domElement.appendChild(this._selectOverlay);
+            }
+        }
+        this.enableDrag();
+    }
+
+    /**
+     * 取消选中高亮
+     */
+    deselect() {
+        if (this.domElement) {
+            this.domElement.style.boxShadow = '';
+            this.domElement.style.outline = '';
+            this.domElement.style.overflow = '';
+        }
+        if (this._selectOverlay) {
+            this._selectOverlay.remove();
+            this._selectOverlay = null;
+        }
+        this.disableDrag();
+    }
+
+    /**
+     * 同步自定义组件列表中的 x/y 位置（拖动后持久化）
+     * @private
+     */
+    _syncCustomElementPosition() {
+        try {
+            const key = 'ui_preview_custom_elements';
+            const raw = localStorage.getItem(key);
+            if (!raw) return;
+            const list = JSON.parse(raw);
+            const item = list.find(c => c.id === this.id);
+            if (!item) return;
+            item.x = this.config.basePosition.x;
+            item.y = this.config.basePosition.y;
+            localStorage.setItem(key, JSON.stringify(list));
+        } catch (e) {
+            // 非自定义组件或存储失败，静默忽略
+        }
+    }
+
+    /**
+     * 同步自定义组件列表中的 image/backgroundColor（上传图片后持久化）
+     * 注意：不存 base64 数据（防止撑爆 localStorage），只存 hasImage 标记。
+     * 图片实际数据已由 saveConfig() → Storage.saveImage() 独立存储。
+     * @private
+     */
+    _syncCustomElementImage() {
+        try {
+            const key = 'ui_preview_custom_elements';
+            const raw = localStorage.getItem(key);
+            if (!raw) return;
+            const list = JSON.parse(raw);
+            const item = list.find(c => c.id === this.id);
+            if (!item) return;
+            // 只存标记，不存 base64 数据
+            item.hasImage = !!this.config.image;
+            item.backgroundColor = this.config.backgroundColor || null;
+            localStorage.setItem(key, JSON.stringify(list));
+        } catch (e) {
+            // 非自定义组件或存储失败，静默忽略
+        }
+    }
+
     /**
      * 销毁元素
      */
@@ -490,7 +879,10 @@ class UIElementBase {
 
     /**
      * 获取当前配置（供编辑器使用）
-     * @returns {Object} UI元素配置
+     * 注意：不包含 image 字段（base64 数据存 IndexedDB，不通过 config 传递），
+     * 避免调用方意外把 base64 写入 localStorage 撑爆 5MB 限制。
+     * 如需读取图片，直接访问 uiElement.config.image 或从 IndexedDB 加载。
+     * @returns {Object} UI元素配置（不含 image）
      */
     getConfig() {
         return {
@@ -503,7 +895,7 @@ class UIElementBase {
             shadow: this.config.shadow || {},
             visible: this.config.visible !== false,
             zIndex: this.config.zIndex || 100,
-            image: this.config.image || null,
+            // image 故意不暴露：base64 数据只存 IndexedDB，不走 localStorage 通道
             defaultImage: this.config.defaultImage || null,
             objectFit: this.config.objectFit || 'cover'
         };

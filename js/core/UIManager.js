@@ -192,6 +192,13 @@ class UIManager {
         Object.keys(savedConfig).forEach(elementId => {
             const config = savedConfig[elementId];
             
+            // 防御性检查：跳过非对象数据
+            if (!config || typeof config !== 'object') return;
+            
+            // 补全 id 和 type（历史数据可能缺失这些字段）
+            if (!config.id) config.id = elementId;
+            if (!config.type) config.type = 'generic';
+            
             // 如果元素已存在，更新配置
             if (this.elements.has(elementId)) {
                 this.updateElement(elementId, config);

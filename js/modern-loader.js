@@ -182,8 +182,11 @@ class ModernModuleLoader {
      */
     static async _loadScript(src) {
         return new Promise((resolve, reject) => {
-            // 检查是否已存在相同脚本
-            const existingScripts = document.querySelectorAll(`script[src="${src}"]`);
+            // 加版本号防止浏览器缓存旧文件
+            const versionedSrc = src + (src.includes('?') ? '&' : '?') + 'v=20260411b';
+            
+            // 检查是否已存在相同脚本（不含版本号比较）
+            const existingScripts = document.querySelectorAll(`script[src^="${src}"]`);
             if (existingScripts.length > 0) {
                 console.log(`📁 脚本已存在: ${src}`);
                 resolve();
@@ -191,7 +194,7 @@ class ModernModuleLoader {
             }
             
             const script = document.createElement('script');
-            script.src = src;
+            script.src = versionedSrc;
             script.async = false; // 确保顺序加载
             
             script.onload = () => {

@@ -148,13 +148,11 @@ class UIElementEditor {
         controlGroup.appendChild(this._createZIndexControl());
         controlGroup.appendChild(document.createElement('br'));
 
-        // 图片控制（仅在元素有图片时显示）
-        if (this.uiElement && (this.uiElement.config.image || this.uiElement.config.defaultImage)) {
-            controlGroup.appendChild(this._createImageControl());
-            controlGroup.appendChild(document.createElement('br'));
-            controlGroup.appendChild(this._createObjectFitControl());
-            controlGroup.appendChild(document.createElement('br'));
-        }
+        // 图片控制（始终显示，支持上传和更换）
+        controlGroup.appendChild(this._createImageControl());
+        controlGroup.appendChild(document.createElement('br'));
+        controlGroup.appendChild(this._createObjectFitControl());
+        controlGroup.appendChild(document.createElement('br'));
         
         // 操作按钮
         controlGroup.appendChild(this._createActionButtons());
@@ -701,6 +699,7 @@ class UIElementEditor {
 
     /**
      * 保存更改到本地存储
+     * 图片 base64 走 IndexedDB（无大小限制），其余配置走 localStorage。
      */
     saveChanges() {
         // 安全获取最新配置
@@ -708,15 +707,27 @@ class UIElementEditor {
             ? this.uiElement.getConfig()
             : this.config;
         
-        // 先应用到元素
+        // 先应用到元素（uiElement.update 内部的 saveConfig 已走 IndexedDB，不会炸）
         if (this.uiElement && typeof this.uiElement.update === 'function') {
             this.uiElement.update(finalConfig);
         }
         
-        // 统一使用 UIStorageManager 模块保存（不再直接操作 localStorage）
+        // 统一使用 UIStorageManager 保存非图片配置
         const UIStorageManager = window.UIStorageManager;
         if (UIStorageManager && typeof UIStorageManager.saveElementConfig === 'function') {
-            UIStorageManager.saveElementConfig(this.config.id, finalConfig);
+            // 剥离 image 字段，防止把 base64 写入 localStorage 撑爆 5MB 限制
+            const imageDataUrl = finalConfig.image;
+            const configToSave = { ...finalConfig };
+            delete configToSave.image;
+            UIStorageManager.saveElementConfig(this.config.id, configToSave);
+
+            // 图片单独存 IndexedDB（异步，不阻塞）
+            if (imageDataUrl && typeof UIStorageManager.saveImageAsync === 'function') {
+                UIStorageManager.saveImageAsync(this.config.id, imageDataUrl).catch(err => {
+                    console.warn('⚠️ IndexedDB 存图失败:', err);
+                });
+            }
+
             console.log('💾 UI元素配置已保存，元素ID:', this.config.id);
             alert(`UI元素 "${this.config.id}" 配置已保存！刷新后将自动恢复。`);
         } else {
@@ -963,11 +974,18 @@ class UIElementEditor {
 
             // 清理
             input.value = '';
+            if (input.parentNode) input.parentNode.removeChild(input);
         });
 
         document.body.appendChild(input);
         input.click();
-        document.body.removeChild(input);
+        // 不立即移除 input，等 change 事件触发后再清理
+        // 部分浏览器在 DOM 移除后 change 事件丢失，导致选图后无反应
+        setTimeout(() => {
+            if (input && input.parentNode) {
+                input.parentNode.removeChild(input);
+            }
+        }, 60000); // 60秒超时兜底清理
     }
 }
 

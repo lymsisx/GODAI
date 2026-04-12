@@ -55,22 +55,49 @@ class Storage {
     
     /**
      * 加载UI配置
+     * 自动清洗历史遗留的 image 字段（base64 应存 IndexedDB 而非 localStorage）
      * @param {Object} defaultConfig 默认配置
      * @returns {Object} 加载的配置或默认配置
      */
     static loadConfig(defaultConfig = {}) {
-        return this.load('config', defaultConfig);
+        const result = this.load('config', defaultConfig);
+        // 自动清洗：如果历史数据中有 image 字段（旧版遗留），就地删除并回写
+        let dirty = false;
+        if (result && typeof result === 'object') {
+            for (const key of Object.keys(result)) {
+                if (result[key] && typeof result[key] === 'object' && result[key].image) {
+                    delete result[key].image;
+                    dirty = true;
+                }
+            }
+            if (dirty) {
+                // 回写清洗后的数据，释放 localStorage 空间
+                this.save('config', result);
+                console.log('🧹 已清洗 localStorage 中残留的 image 数据');
+            }
+        }
+        return result;
     }
     
     /**
      * 保存指定UI元素的配置
+     * 注意：写回前会清洗所有元素的 image 字段（base64 走 IndexedDB，不能留在 localStorage）
      * @param {string} elementId 元素ID
      * @param {Object} config 元素配置
      * @returns {boolean} 是否保存成功
      */
     static saveElementConfig(elementId, config) {
         const allConfig = this.loadConfig();
-        allConfig[elementId] = config;
+        // 清洗入参中的 image（防御性，调用方应已剥离）
+        const cleanConfig = { ...config };
+        delete cleanConfig.image;
+        allConfig[elementId] = cleanConfig;
+        // 清洗历史数据中所有元素的 image 字段（防止旧数据残留撑爆 localStorage）
+        for (const key of Object.keys(allConfig)) {
+            if (allConfig[key] && typeof allConfig[key] === 'object' && allConfig[key].image) {
+                delete allConfig[key].image;
+            }
+        }
         return this.saveConfig(allConfig);
     }
     
@@ -125,7 +152,90 @@ class Storage {
         const fullKey = this.PREFIX + key;
         localStorage.removeItem(fullKey);
     }
-    
+
+    // ─────────────────────────────────────────────
+    // IndexedDB 异步图片存取（无大小限制）
+    // ─────────────────────────────────────────────
+
+    /**
+     * 获取（或初始化）IndexedDB 实例
+     * @returns {Promise<IDBDatabase>}
+     */
+    static _getDB() {
+        if (this._dbPromise) return this._dbPromise;
+        this._dbPromise = new Promise((resolve, reject) => {
+            const req = indexedDB.open('ui_preview_db', 1);
+            req.onupgradeneeded = (e) => {
+                const db = e.target.result;
+                if (!db.objectStoreNames.contains('images')) {
+                    db.createObjectStore('images');
+                }
+            };
+            req.onsuccess = (e) => resolve(e.target.result);
+            req.onerror   = (e) => reject(e.target.error);
+        });
+        return this._dbPromise;
+    }
+
+    /**
+     * 异步保存图片到 IndexedDB
+     * @param {string} key  图片键名（元素 ID）
+     * @param {string} dataUrl 图片 DataURL
+     * @returns {Promise<boolean>}
+     */
+    static async saveImageAsync(key, dataUrl) {
+        try {
+            const db = await this._getDB();
+            return new Promise((resolve) => {
+                const tx  = db.transaction('images', 'readwrite');
+                const req = tx.objectStore('images').put(dataUrl, key);
+                req.onsuccess = () => resolve(true);
+                req.onerror   = () => { console.warn('⚠️ IndexedDB 存图失败:', req.error); resolve(false); };
+            });
+        } catch (err) {
+            console.warn('⚠️ IndexedDB 存图异常:', err);
+            return false;
+        }
+    }
+
+    /**
+     * 异步从 IndexedDB 加载图片
+     * @param {string} key 图片键名（元素 ID）
+     * @returns {Promise<string|null>}
+     */
+    static async loadImageAsync(key) {
+        try {
+            const db = await this._getDB();
+            return new Promise((resolve) => {
+                const tx  = db.transaction('images', 'readonly');
+                const req = tx.objectStore('images').get(key);
+                req.onsuccess = () => resolve(req.result || null);
+                req.onerror   = () => resolve(null);
+            });
+        } catch (err) {
+            return null;
+        }
+    }
+
+    /**
+     * 异步从 IndexedDB 删除图片
+     * @param {string} key 图片键名
+     * @returns {Promise<void>}
+     */
+    static async removeImageAsync(key) {
+        try {
+            const db = await this._getDB();
+            return new Promise((resolve) => {
+                const tx  = db.transaction('images', 'readwrite');
+                const req = tx.objectStore('images').delete(key);
+                req.onsuccess = () => resolve();
+                req.onerror   = () => resolve();
+            });
+        } catch (err) {
+            // 忽略
+        }
+    }
+
     /**
      * 清除所有UI预览工具的数据
      */
@@ -144,6 +254,12 @@ class Storage {
         keysToRemove.forEach(key => {
             localStorage.removeItem(key);
         });
+
+        // 同步清除 IndexedDB 图片库
+        this._getDB().then(db => {
+            const tx = db.transaction('images', 'readwrite');
+            tx.objectStore('images').clear();
+        }).catch(() => {});
         
         return keysToRemove.length;
     }

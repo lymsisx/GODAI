@@ -1,6 +1,130 @@
 # UI预览工具 (GODAI) 改动日志
 
-## [2026-04-11 15:16] 修复保存配置刷新后重置问题
+## [2026-04-11 18:55] 修复有图片组件拖拽失效 + loadSavedConfig 报错
+
+**改动文件**（3个文件）：
+- `js/ui/UIElementBase.js` — `enableDrag()` 新增 `dragstart` + `selectstart` 事件拦截；`disableDrag()` 同步清理
+- `js/core/UIManager.js` — `loadSavedConfig()` 对 config 补全 `id`/`type`（历史脏数据防御），跳过非对象数据
+- `index.html` + `js/modern-loader.js` — 版本号升级到 `v=20260411b`
+
+**根因1（拖拽失效）**：`<img>` 的 `draggable=false` + `pointerEvents=none` 不够——浏览器 `dragstart` 事件在 `mousedown` 之后、`mousemove` 之前触发，抢占了自定义拖拽。需要在 container 上显式监听 `dragstart` 并 `preventDefault()`。
+
+**根因2（"元素配置必须包含id和type"报错）**：`UIManager.loadSavedConfig()` 从 localStorage 读取旧配置时，某些历史数据不含 `id`/`type` 字段，导致 `registerElement` 拒绝注册。修复：自动补全。
+
+**报错记录**：无
+
+**改动文件**（3个文件）：
+- `js/ui/UIElementBase.js` — 3处创建 `<img>` 的位置（`render()`、`_applyRestoredImage()`、`updateImage()`）都加上 `draggable=false` 和 `style.pointerEvents='none'`
+- `js/modern-loader.js` — 动态加载脚本时加版本号 `?v=20260411` 防止浏览器缓存旧文件
+- `index.html` — 入口 `<script>` 标签加版本号
+
+**根因**：浏览器默认允许拖拽 `<img>` 元素（会出现半透明幽灵图片），原生 drag 行为抢占了 `mousedown` 事件，导致绑定在 container 上的自定义拖拽（`enableDrag()`）失效。没有图片的组件（粉色占位方块）不受影响。
+
+**报错记录**：无
+
+## [2026-04-11 18:45] 修复 UIElementEditor.saveChanges + saveElementConfig 残留 image 污染
+
+**改动文件**（3个文件，4处改动）：
+- `js/editor/UIElementEditor.js` — `saveChanges()` 在调 `saveElementConfig` 前剥离 image 字段，图片走 `saveImageAsync()` 存 IndexedDB
+- `js/ui/UIElementBase.js` — `getConfig()` 不再返回 image 字段（从根源截断 base64 外泄到 localStorage 的所有通道）
+- `js/utils/Storage.js` — 2处：①`saveElementConfig()` 写回前清洗所有元素的 image 字段；②`loadConfig()` 加载时自动清洗历史遗留的 image 脏数据并回写释放空间
+
+**根因**：上一次只修了 `UIElementBase.saveConfig()` 路径。`UIElementEditor.saveChanges()` 有独立的存储路径直接调 `saveElementConfig(id, config含image)`。同时 `saveElementConfig()` 的 `loadConfig()` 会读出旧的 allConfig，如果历史数据含有 image 字段残留，全量写回时照样爆 quota。这导致配置无法持久化，拖拽位置无法保存，刷新后恢复旧位置→看起来"自由移动坏了"。
+
+**报错记录**：无
+
+## [2026-04-11 18:35] 彻底修复 QuotaExceededError：localStorage 存图改 IndexedDB
+
+**改动文件**（3个文件）：
+- `js/utils/Storage.js` — 新增 `saveImageAsync` / `loadImageAsync` / `removeImageAsync` 三个 IndexedDB 方法；`clearAll()` 同步清 IndexedDB；`_dbPromise` 单例缓存
+- `js/ui/UIElementBase.js` — 3处：①`render()` 末尾删除 `saveConfig()` 调用；②`saveConfig()` 图片改走 `saveImageAsync()`（异步，无大小限制）；③`_loadSavedConfig()` 完全重写为异步加载，优先级 IndexedDB > localStorage旧key > config.image旧字段，新增 `_applyRestoredImage()` 辅助方法
+- `js/editor/EditorManager.js` — 2处：①`_registerCustomElement()` 传给 UIElementBase 的 config 不带 image，注册后异步 `updateImage()`；持久化 cfg 时 base64 剥离改存 hasImage 标记；②`_showAddElementDialog` 确认回调注释说明
+
+**根因链（已斩断）**：
+`_registerCustomElement(cfg含base64)` → `registerElement` → `new UIElementBase(config含image)` → `render()` → `saveConfig()` → `saveImage()` → `localStorage.setItem(11MB)` → **QuotaExceededError**
+
+**新方案流程**：
+1. 注册时 config 不带 image，`render()` 不调 `saveConfig()`
+2. 注册完成后 `updateImage(imageData)` → `saveConfig()` → `saveImageAsync(id, dataUrl)` → IndexedDB（无限制）
+3. 页面恢复时 `_loadSavedConfig()` 异步查 IndexedDB，加载完成后 `_applyRestoredImage()` 就地更新 img.src
+
+**报错记录**：无，lint 仅有 7 条 TS HINT（window.UIStorageManager 动态挂载，既有问题）
+
+## [2026-04-11 18:25] BUG修复：保存图片报错 + 自由移动功能失效
+
+**改动文件**（2个文件、5处改动）：
+- `js/ui/UIElementBase.js` — 4处改动
+- `js/editor/EditorManager.js` — 1处改动
+
+**BUG 1 根因（保存图片失败 Storage.js:22）**：`saveConfig()` 把整个 config 对象（含 base64 图片，约 11MB）JSON.stringify 写入 localStorage，触发 `QuotaExceededError`（5MB 限制）。
+修复：`saveConfig()` 序列化前临时剥离 `config.image`，改用 `UIStorageManager.saveImage(id, dataUrl)` 将图片存入独立 key `ui_preview_image_{id}`；清除图片时也同步删除该 key。
+
+**BUG 2 根因（自由移动坏掉）**：`updateImage()` 的 else 分支（尚无 img 节点时）调用 `this.render()`，而 `render()` 每次都创建全新 DOM container 并覆盖 `this.domElement`，导致 `enableDrag()` 绑定在旧 DOM 上的 mousedown 事件丢失。
+修复：else 分支改为就地创建 img 节点并 `appendChild` 到现有 container，不再调用 `render()`；仅当 domElement 不存在时才走完整渲染流程。
+
+**关联修复（自定义组件重启后图片消失）**：`_syncCustomElementImage()` 以前把 base64 存入自定义组件列表（`ui_preview_custom_elements`），现在改为只存 `hasImage: true` 标记。对应地，`_registerCustomElement()` 恢复时如果 `cfg.hasImage` 为 true，从 `Storage.loadImage(id)` 读取实际图片数据。
+
+**向后兼容**：`_loadSavedConfig()` 先查独立 image key，再回退到旧 `config.image` 字段，旧数据无感迁移。
+
+**报错记录**：无 lint 错误（3条 TS HINT 是 `window.UIStorageManager` 动态挂载，不影响运行）。
+
+---
+
+## [2026-04-11 17:41] BUG修复：自定义组件名称持久化失效 + 上传图片无法保存
+
+**改动文件**（3个文件、4处改动）：
+- `js/editor/UIElementEditor.js` — `_changeImage()` 延迟移除 file input
+- `js/ui/UIElementBase.js` — `_loadSavedConfig()` 补充恢复 name/backgroundColor；`updateImage()` 新增 `_syncCustomElementImage()`
+- `js/editor/EditorManager.js` — `renameCustomElement()` 加 `saveConfig()` 持久化
+
+**BUG 1 根因**：改名时只更新了 localStorage 列表中的 displayName，未调用 saveConfig 持久化新 name 到 UIStorageManager，且 _loadSavedConfig 未恢复 name 字段 → 重载后名称回退。
+修复：(A) renameCustomElement 末尾加 uiEl.saveConfig()；(B) _loadSavedConfig 补充恢复 name + backgroundColor。
+
+**BUG 2 根因**：_changeImage 中 input.click() 后立即 removeChild 导致部分浏览器 change 事件丢失（DOM 节点被销毁后监听器失效）；且 updateImage 只存了 UIStorageManager 未同步自定义组件列表的 image 字段。
+修复：(A) removeChild 延迟到 change 回调内执行 + 60s 超时兜底；(B) 新增 _syncCustomElementImage 同步写入自定义组件列表。
+
+**报错记录**：无 lint 错误。
+
+---
+
+## [2026-04-11 16:42] 自定义组件支持改名
+
+**改动文件**：
+- `js/editor/EditorManager.js`
+
+**改动内容**：
+1. `updateElementList()` — 自定义元素按钮左右 padding 均扩为 22px，左上角新增蓝色「✎」改名按钮
+2. 新增 `_inlineRenameElement(elementId, button, currentName)` — 点击改名按钮后把按钮文字原地替换为 `<input>`，按 Enter 或失焦提交，按 Esc 取消
+3. 新增 `renameCustomElement(elementId, newName)` — 将新名称写入 localStorage 持久化列表，同步更新 UIManager 元素的 `config.name`，并刷新元素列表
+
+**报错记录**：无
+
+
+
+**改动文件**：
+- `js/editor/EditorManager.js`
+
+**改动内容**：
+1. 构造函数新增 `_CUSTOM_ELEMENTS_KEY` 常量（`ui_preview_custom_elements`）用于 localStorage 持久化
+2. `_init()` 末尾调用 `_loadCustomElements()`，页面刷新后自动恢复已添加的自定义组件
+3. `_initElementSelector()` 元素列表下方增加绿色「➕ 添加组件」按钮
+4. `updateElementList()` 改写：
+   - 自定义元素显示 `displayName`（中文名），鼠标悬停 title 显示内部 ID
+   - 自定义元素深绿色底色 + 右上角红色「✕」删除按钮
+5. 新增方法 `_getCustomElementsConfig()` / `_saveCustomElementsConfig()` — localStorage 读写
+6. 新增方法 `_loadCustomElements()` — 初始化时恢复持久化的自定义组件
+7. 新增方法 `_registerCustomElement(cfg, persist)` — 向 UIManager 注册并可选持久化
+8. 新增方法 `removeCustomElement(elementId)` — 移除组件 + 从持久化列表删除
+9. 新增方法 `_showAddElementDialog()` — 弹出添加组件对话框，支持以下字段：
+   - 组件 ID（英文+下划线，唯一性校验）
+   - 显示名称（自定义中文名）
+   - 层级 z-index
+   - 位置 X / Y（基准坐标）
+   - 宽度 W / 高度 H
+
+**报错记录**：无
+
+
 
 **改动文件**：
 - `js/ui/UIElementBase.js`

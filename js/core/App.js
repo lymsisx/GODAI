@@ -232,7 +232,7 @@ class App {
             div.style.cssText = `
                 position: fixed;
                 bottom: 10px;
-                right: 10px;
+                left: 10px;
                 background: rgba(0, 0, 0, 0.8);
                 color: white;
                 padding: 8px 12px;
@@ -291,11 +291,66 @@ class App {
     }
 
     /**
-     * 导出配置
+     * 导出配置（包含图片打包为 ZIP）
+     * 从 IndexedDB 读取每个元素的图片 base64，转为文件存入 ZIP 的 images/ 目录，
+     * config.json 中记录每个元素的 imagePath 相对路径。
      */
-    exportConfig() {
+    async exportConfig() {
+        // 检查 JSZip 是否可用
+        if (typeof JSZip === 'undefined') {
+            alert('JSZip 库未加载，无法导出。请检查网络连接。');
+            return;
+        }
+
+        const zip = new JSZip();
+        const imagesFolder = zip.folder('images');
+
+        // 构建基础配置
+        const elements = this.uiManager
+            ? Array.from(this.uiManager.elements.values())
+            : [];
+
+        const elementConfigs = [];
+
+        for (const el of elements) {
+            const cfg = el.getConfig();
+
+            // 尝试从 IndexedDB 读取图片
+            let imageDataUrl = el.config.image || null;
+            if (!imageDataUrl && window.UIStorageManager &&
+                typeof window.UIStorageManager.loadImageAsync === 'function') {
+                try {
+                    imageDataUrl = await window.UIStorageManager.loadImageAsync(el.id);
+                } catch (_) {}
+            }
+
+            if (imageDataUrl && imageDataUrl.startsWith('data:')) {
+                // 解析 MIME 类型确定扩展名
+                const mimeMatch = imageDataUrl.match(/^data:(image\/\w+);base64,/);
+                let ext = 'png';
+                if (mimeMatch) {
+                    const mime = mimeMatch[1];
+                    if (mime.includes('jpeg') || mime.includes('jpg')) ext = 'jpg';
+                    else if (mime.includes('gif')) ext = 'gif';
+                    else if (mime.includes('webp')) ext = 'webp';
+                    else if (mime.includes('bmp')) ext = 'bmp';
+                }
+
+                const fileName = `${el.id}.${ext}`;
+                const relativePath = `images/${fileName}`;
+
+                // 将 base64 转为二进制数据加入 ZIP
+                const base64Data = imageDataUrl.split(',')[1];
+                imagesFolder.file(fileName, base64Data, { base64: true });
+
+                cfg.imagePath = relativePath;
+            }
+
+            elementConfigs.push(cfg);
+        }
+
         const config = {
-            version: '1.0.0',
+            version: '2.0.0',
             timestamp: new Date().toISOString(),
             baseResolution: {
                 width: Scaler.BASE_WIDTH,
@@ -307,19 +362,55 @@ class App {
             },
             scale: Scaler.getScale(),
             statusBar: this.statusBar ? this.statusBar.getConfig() : null,
-            uiElements: this.uiManager ? Array.from(this.uiManager.elements.values()).map(el => el.getConfig()) : []
+            uiElements: elementConfigs,
+            layers: {}
         };
-        
-        const blob = new Blob([JSON.stringify(config, null, 2)], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `ui-preview-config-${new Date().toISOString().slice(0, 10)}.json`;
-        a.click();
-        URL.revokeObjectURL(url);
-        
-        console.log('📤 配置已导出:', config);
-        alert('配置已导出为JSON文件！');
+
+        // 导出壁纸/桌面层图片
+        const layerKeys = [
+            { configKey: 'wallpaper', idbKey: '_layer_wallpaper' },
+            { configKey: 'desktopLayer', idbKey: '_layer_desktopLayer' }
+        ];
+        for (const layer of layerKeys) {
+            if (window.UIStorageManager && typeof window.UIStorageManager.loadImageAsync === 'function') {
+                try {
+                    const layerDataUrl = await window.UIStorageManager.loadImageAsync(layer.idbKey);
+                    if (layerDataUrl && layerDataUrl.startsWith('data:')) {
+                        const mimeMatch = layerDataUrl.match(/^data:(image\/\w+);base64,/);
+                        let ext = 'png';
+                        if (mimeMatch) {
+                            const mime = mimeMatch[1];
+                            if (mime.includes('jpeg') || mime.includes('jpg')) ext = 'jpg';
+                            else if (mime.includes('bmp')) ext = 'bmp';
+                        }
+                        const fileName = `${layer.configKey}.${ext}`;
+                        const relativePath = `images/${fileName}`;
+                        const base64Data = layerDataUrl.split(',')[1];
+                        imagesFolder.file(fileName, base64Data, { base64: true });
+                        config.layers[layer.configKey] = relativePath;
+                    }
+                } catch (_) {}
+            }
+        }
+
+        zip.file('config.json', JSON.stringify(config, null, 2));
+
+        // 生成 ZIP 并触发下载
+        try {
+            const blob = await zip.generateAsync({ type: 'blob' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `ui-preview-config-${new Date().toISOString().slice(0, 10)}.zip`;
+            a.click();
+            URL.revokeObjectURL(url);
+
+            console.log('📤 配置已导出（ZIP 包含图片）:', config);
+            alert(`配置已导出为 ZIP 文件！包含 ${elementConfigs.filter(c => c.imagePath).length} 张图片。`);
+        } catch (err) {
+            console.error('❌ ZIP 打包失败:', err);
+            alert('导出失败: ' + err.message);
+        }
     }
 }
 

@@ -51,6 +51,9 @@ class StatusBarUI extends UIElementBase {
         const mainLayer = document.createElement('div');
         mainLayer.className = 'status-bar-main';
         mainLayer.id = this.id + 'Main';
+        mainLayer.style.width = '100%';
+        mainLayer.style.height = '100%';
+        mainLayer.style.position = 'relative';
         
         // 创建图片元素（如果有图片）
         if (this.config.image) {
@@ -60,7 +63,7 @@ class StatusBarUI extends UIElementBase {
             this.imageElement.alt = '状态栏';
             this.imageElement.style.width = '100%';
             this.imageElement.style.height = '100%';
-            this.imageElement.style.objectFit = 'cover';
+            this.imageElement.style.objectFit = this.config.objectFit || 'fill';
             mainLayer.appendChild(this.imageElement);
         }
         
@@ -121,7 +124,7 @@ class StatusBarUI extends UIElementBase {
                 this.imageElement.alt = '状态栏';
                 this.imageElement.style.width = '100%';
                 this.imageElement.style.height = '100%';
-                this.imageElement.style.objectFit = 'cover';
+                this.imageElement.style.objectFit = this.config.objectFit || 'fill';
                 
                 // 添加到主层
                 const mainLayer = this.domElement.querySelector('.status-bar-main');

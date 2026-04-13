@@ -1,5 +1,137 @@
 # UI预览工具 (GODAI) 改动日志
 
+## [2026-04-13 18:51] ` 键改为隐藏UI辅助元素，移除自动截图功能
+
+**改动文件**（2个文件）：
+- `index.html` — 截图按钮改为"隐藏UI"按钮（onclick=hideUI）；新增 `hideUI()` 全局函数；删除 `takeScreenshot()` 函数及 html2canvas CDN 引用；清理 CSS 注释
+- `js/editor/EditorManager.js` — ` 键从"切换编辑模式"改为"隐藏/显示辅助 UI"；新增 `_toggleUIVisibility()` 方法（隐藏编辑面板、编辑按钮、隐藏UI按钮、缩放信息、选中高亮绿框）；编辑按钮文字从 `编辑模式 (`)` 改为 `编辑模式` / `退出编辑`
+
+**行为变更**：
+- 按 ` 或点击"隐藏UI"按钮 → 隐藏所有辅助元素（编辑面板+按钮+缩放信息+选中高亮），只留纯净画面供手动截图
+- 再按 ` → 恢复所有辅助元素
+- html2canvas 自动截图功能已移除（file:// 协议下 canvas tainted 无法解决）
+
+---
+
+## [2026-04-13 17:44] 修复截图 tainted canvas + 壁纸/桌面层刷新丢失
+
+**改动文件**（4个文件）：
+- `index.html` — 截图改用 `allowTaint:true` + 三级降级导出（toBlob→toDataURL→提示用 HTTP 服务器）；壁纸/桌面层上传图片后存入 IndexedDB（key: `_layer_wallpaper` / `_layer_desktopLayer`）；新增 `_applyLayerImage()` 和 `_restoreLayerImages()` 函数
+- `js/main.js` — 应用启动成功后调用 `_restoreLayerImages()` 从 IndexedDB 恢复壁纸/桌面层图片
+- `js/core/App.js` — `exportConfig()` 增加壁纸/桌面层图片导出（写入 ZIP 的 `images/wallpaper.png` 和 `images/desktopLayer.png`，config.json 中记录在 `layers` 字段）
+- `js/editor/EditorManager.js` — `_importFromZip()` 增加壁纸/桌面层图片恢复逻辑
+
+**BUG 修复**：
+1. **截图 Tainted canvas**：`file://` 协议下 data: URL 图片会污染 canvas，`toBlob()` 抛安全异常。改为 `allowTaint:true` 渲染后三级降级导出
+2. **壁纸/桌面层刷新丢失**：这两层的图片只设了内联 `style.background`，没有任何持久化。现在上传时同步存 IndexedDB，页面加载时自动恢复
+
+---
+
+## [2026-04-13 16:50] 导出/导入配置升级：ZIP 打包含图片
+
+**改动文件**（3个文件）：
+- `index.html` — 引入 JSZip CDN（v3.10.1）
+- `js/core/App.js` — `exportConfig()` 改为 async，从 IndexedDB 读取图片 base64 → 打包到 ZIP 的 `images/` 目录，config.json 中记录 `imagePath` 相对路径
+- `js/editor/EditorManager.js` — `importConfig()` 支持 `.zip` 和 `.json` 两种格式；新增 `_importFromZip()` 解包 ZIP 恢复图片到 IndexedDB 并更新 UI；新增 `_blobToDataUrl()` 辅助方法；`_applyImportedConfig()` 兼容新版数组格式和旧版对象格式
+
+**功能说明**：
+- **导出**：点击"导出配置"按钮，自动读取所有 UI 元素在 IndexedDB 中的图片，与配置 JSON 一起打包为 `.zip` 下载，图片按 `images/{elementId}.{ext}` 命名
+- **导入**：支持导入 `.zip`（新版含图片）和 `.json`（旧版纯配置）两种格式，ZIP 导入时自动将图片恢复到 IndexedDB 并刷新 UI 显示
+- **向后兼容**：旧版 JSON 配置仍可正常导入
+
+---
+
+## [2026-04-13 16:37] 新增截图功能（2560×1440）
+
+**改动文件**（1个文件 + 1个新文件夹）：
+- `index.html` — 新增截图按钮 `#screenshotBtn`、引入 html2canvas CDN、新增 `takeScreenshot()` 函数
+- `screenshots/.gitkeep` — 新建截图存放文件夹
+
+**功能说明**：
+- 点击"截图"按钮后自动隐藏编辑按钮、截图按钮、缩放信息、编辑面板、选中高亮
+- 使用 html2canvas 以 2560×1440 分辨率渲染页面并导出 PNG
+- 文件名格式: `screenshot_YYYY-MM-DDTHH-MM-SS.png`，触发浏览器下载
+
+---
+
+## [2026-04-13 16:02] 阴影新增模糊度控件，默认硬边(0px)
+
+**改动文件**（2个文件）：
+- `js/ui/UIElementBase.js` — shadow 默认配置新增 `blur: 0`；`applyShadow()` 使用 config.blur 计算模糊半径
+- `js/editor/UIElementEditor.js` — 默认配置新增 `blur: 0`；`_createShadowControls()` 新增模糊度滑条（0~20px）；`resetToDefault()`/`refresh()` 同步 blur 控件
+
+---
+
+## [2026-04-13 15:55] 阴影系统改造：矩形阴影 → 轮廓阴影（drop-shadow）
+
+**改动文件**（1个文件）：
+- `js/ui/UIElementBase.js` — 整体改造阴影渲染方案
+
+**改动内容**：
+- `applyShadow()`: 从创建独立 `<div>` 矩形阴影改为 CSS `filter: drop-shadow()`，沿图片实际可见像素轮廓生成阴影
+- 新增 `_colorWithOpacity()` 辅助方法：将 HEX/RGB 颜色与 opacity 合并为 rgba 字符串
+- `removeShadow()`: 改为清除 `filter` 属性
+- `show()`/`hide()`: 移除对 shadowElement 的处理（drop-shadow 随本体自动显隐）
+- `render()`: 移除"需要先添加到 body"的注释
+- `update()`/`importConfig()`: 移除对 shadowElement zIndex 的更新
+- 拖拽 `_onMouseMove`: 移除同步 shadowElement 位置的代码
+- 所有 shadowElement 清理代码保留为兼容旧版的迁移逻辑
+
+**效果**：透明区域的不规则 PNG 图片现在只沿实际像素轮廓生成阴影，而非整个矩形画布。
+
+---
+
+## [2026-04-13 15:13] 桌面层 z-index 调整为 999
+
+**改动文件**（1个文件）：
+- `index.html` — `#desktopLayer` CSS 规则新增 `z-index: 999`
+
+---
+
+## [2026-04-13 15:10] 修复壁纸层和桌面层在编辑菜单中丢失
+
+**改动文件**（1个文件）：
+- `js/editor/EditorManager.js` — `updateElementList()` 头部新增壁纸层(`#wallpaper`)和桌面层(`#desktopLayer`)的特殊按钮；新增 `_selectSpecialLayer()` 方法渲染专用编辑面板（换图、透明度、显示/隐藏）
+
+**根因**：
+壁纸层和桌面层是纯 HTML div（`index.html` 中静态定义），不通过 `UIManager.registerElement()` 注册，因此 `updateElementList()` 遍历 `uiManager.elements` 时不会包含它们。编辑面板从静态 HTML 改为动态生成后，这两个特殊层的编辑入口丢失。
+
+---
+
+## [2026-04-13 14:31] 修复通用组件阴影层不显示（第二层根因）
+
+**改动文件**（1个文件）：
+- `js/ui/UIElementBase.js` — `render()` 中调整执行顺序：先 `document.body.appendChild(container)`，再 `applyShadow()`
+
+**根因**：
+`render()` 中 `applyShadow()` 在 `appendChild(container)` 之前调用 → `this.domElement.parentNode` 是 null → `insertBefore(shadowElement, domElement)` 不执行 → shadowElement 被创建但未挂载到 DOM。StatusBarUI 不受影响是因为其 render() 是先 appendChild 再 applyShadow。
+
+---
+
+## [2026-04-13 14:16] 修复通用组件阴影层不显示
+
+**改动文件**（1个文件）：
+- `js/ui/UIElementBase.js` — `defaultConfig` 新增默认 `shadow` 字段（offsetX/offsetY/color/opacity）；`_loadSavedConfig()` 加强防御，空对象旧存档不覆盖默认值
+
+**根因**：
+`UIElementBase.defaultConfig` 缺少 `shadow` 字段 → 通用组件初始化时 `this.config.shadow` 为 `undefined` → `render()` 的 `if (this.config.shadow)` 判断为 false → `applyShadow()` 从未被调用 → `shadowElement` 永远是 null。`StatusBarUI` 有阴影是因为其 `defaultStatusBarConfig` 里显式写了 shadow，其他组件没有。
+
+---
+
+## [2026-04-13 14:10] 修复状态栏形状与阴影对不上 + 编辑器输入改为基准坐标
+
+**改动文件**（2个文件）：
+- `js/ui/StatusBarUI.js` — 删除 `shadow.image` 字段（恢复纯色矩形阴影方案）；`mainLayer` 补全 `width:100%; height:100%; position:relative`；`render()` 和 `updateImage()` 中 `objectFit` 改为读取 `this.config.objectFit || 'fill'`（不再硬编码 cover）
+- `js/editor/UIElementEditor.js` — 位置/尺寸输入框改为**直接显示/输入基准坐标**（去掉 `toActual`/`toBase` 换算）；标签从"像素"改为"基准坐标 2560×1440"；`refresh()` 同步去掉 toActual
+
+**根因**：
+1. `shadow.image: 'assets/statusbar_shadow/default.png'` 文件不存在，导致阴影走图片渲染路径，backgroundImage 失败后形状乱掉，与主体不对齐
+2. `mainLayer` 无 `height:100%`，导致容器尺寸和内部渲染区域不一致
+3. `objectFit` 硬编码 `cover`，用户选择 fill 但无效
+4. 编辑器输入框经过 toActual 换算，用户以为输入基准值但实际已缩放，导致输入100×100看到的不是100×100的视觉效果
+
+---
+
 ## [2026-04-11 18:55] 修复有图片组件拖拽失效 + loadSavedConfig 报错
 
 **改动文件**（3个文件）：

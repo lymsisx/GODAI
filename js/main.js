@@ -38,6 +38,11 @@ class AppStarter {
             window.Scaler = Scaler;
             // UIStorageManager 已在 Storage.js 中通过 window.UIStorageManager = Storage 导出，无需重复赋值
             
+            // 4.5. 恢复壁纸/桌面层图片（从 IndexedDB）
+            if (typeof _restoreLayerImages === 'function') {
+                _restoreLayerImages();
+            }
+            
             // 5. 显示欢迎信息
             this._showWelcome();
             

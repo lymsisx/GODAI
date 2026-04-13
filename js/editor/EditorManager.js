@@ -46,11 +46,13 @@ class EditorManager {
      * 绑定全局快捷键
      */
     _bindGlobalShortcuts() {
+        this._uiHidden = false; // 辅助 UI 是否被隐藏
+
         document.addEventListener('keydown', (e) => {
-            // 反引号键（`）切换编辑模式
+            // 反引号键（`）切换隐藏/显示辅助 UI（编辑面板、缩放信息、按钮），方便手动截图
             if (e.key === '`' || e.key === '~') {
                 e.preventDefault();
-                this.toggleEditMode();
+                this._toggleUIVisibility();
             }
             
             // ESC键退出编辑模式
@@ -60,6 +62,52 @@ class EditorManager {
         });
         
         console.log('⌨️ 全局快捷键已绑定');
+    }
+
+    /**
+     * 切换辅助 UI 元素的显隐（编辑面板、编辑按钮、截图按钮、缩放信息）
+     * 用于手动截图时隐藏所有非内容元素
+     */
+    _toggleUIVisibility() {
+        this._uiHidden = !this._uiHidden;
+        const display = this._uiHidden ? 'none' : '';
+
+        // 需要隐藏/显示的元素 ID
+        const ids = ['editPanel', 'editBtn', 'screenshotBtn', 'scaleInfo'];
+        for (const id of ids) {
+            const el = document.getElementById(id);
+            if (el) {
+                if (this._uiHidden) {
+                    // 记录原始 display，以便恢复
+                    el.dataset.origDisplay = el.style.display;
+                    el.style.display = 'none';
+                } else {
+                    el.style.display = el.dataset.origDisplay || '';
+                    delete el.dataset.origDisplay;
+                }
+            }
+        }
+
+        // 隐藏选中高亮（编辑模式下的绿框）
+        if (this._uiHidden) {
+            document.querySelectorAll('.generic-ui-element').forEach(el => {
+                el.dataset.origBoxShadow = el.style.boxShadow || '';
+                el.dataset.origOverflow = el.style.overflow || '';
+                el.style.boxShadow = '';
+                el.style.overflow = '';
+            });
+        } else {
+            document.querySelectorAll('.generic-ui-element').forEach(el => {
+                if (el.dataset.origBoxShadow !== undefined) {
+                    el.style.boxShadow = el.dataset.origBoxShadow;
+                    el.style.overflow = el.dataset.origOverflow;
+                    delete el.dataset.origBoxShadow;
+                    delete el.dataset.origOverflow;
+                }
+            });
+        }
+
+        console.log(`👁️ 辅助 UI: ${this._uiHidden ? '已隐藏（按 ` 恢复）' : '已显示'}`);
     }
 
     /**
@@ -288,10 +336,52 @@ class EditorManager {
         // 清空列表
         elementList.innerHTML = '';
         
+        // ── 壁纸层和桌面层特殊按钮（纯 HTML 层，不在 UIManager 中）──
+        const specialLayers = [
+            { id: '_wallpaper', name: '🖼️ 壁纸层', domId: 'wallpaper', inputId: 'wallpaperInput' },
+            { id: '_desktopLayer', name: '🖥️ 桌面层', domId: 'desktopLayer', inputId: 'desktopLayerInput' }
+        ];
+        for (const layer of specialLayers) {
+            const wrapper = document.createElement('div');
+            wrapper.style.cssText = 'position: relative;';
+            
+            const isSelected = this.currentElementId === layer.id;
+            const button = document.createElement('button');
+            button.textContent = layer.name;
+            button.title = `点击编辑${layer.name}`;
+            button.dataset.elementId = layer.id;
+            button.style.cssText = `
+                background: ${isSelected ? '#4CAF50' : '#1a2a4a'};
+                color: white;
+                border: 1px solid ${isSelected ? '#4CAF50' : '#2196F3'};
+                padding: 6px 10px;
+                border-radius: 3px;
+                cursor: pointer;
+                font-size: 11px;
+                text-align: center;
+                transition: all 0.2s ease;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                width: 100%;
+            `;
+            button.addEventListener('mouseenter', () => {
+                if (this.currentElementId !== layer.id) button.style.background = '#253a5a';
+            });
+            button.addEventListener('mouseleave', () => {
+                if (this.currentElementId !== layer.id) button.style.background = '#1a2a4a';
+            });
+            button.addEventListener('click', () => {
+                this._selectSpecialLayer(layer);
+            });
+            wrapper.appendChild(button);
+            elementList.appendChild(wrapper);
+        }
+        
         // 获取所有UI元素
         const elements = this.app.uiManager.elements;
         if (!elements || elements.size === 0) {
-            elementList.innerHTML = '<p style="color: #888; text-align: center; grid-column: span 2;">没有可编辑的UI元素</p>';
+            // 即使没有 UIManager 元素，壁纸/桌面按钮已经添加了
             return;
         }
         
@@ -417,6 +507,127 @@ class EditorManager {
     }
 
     /**
+     * 选择壁纸/桌面特殊层进行编辑
+     * @param {Object} layer  { id, name, domId, inputId }
+     */
+    _selectSpecialLayer(layer) {
+        // 清除旧选中元素的高亮
+        if (this.currentElementId && !this.currentElementId.startsWith('_')) {
+            const prevElement = this.app.uiManager.elements.get(this.currentElementId);
+            if (prevElement && typeof prevElement.deselect === 'function') {
+                prevElement.deselect();
+            }
+        }
+        
+        this.currentElementId = layer.id;
+        this.updateElementList();
+        
+        // 渲染专用编辑面板
+        const editorContainer = document.getElementById('editorContainer');
+        if (!editorContainer) return;
+        editorContainer.innerHTML = '';
+        
+        // 标题
+        const title = document.createElement('h4');
+        title.style.cssText = 'margin-top:0;color:#2196F3;';
+        title.textContent = `✏️ 编辑: ${layer.name}`;
+        editorContainer.appendChild(title);
+        
+        // 当前预览
+        const domEl = document.getElementById(layer.domId);
+        const currentBg = domEl ? domEl.style.background || domEl.style.backgroundImage || '默认图片' : '未找到';
+        
+        const infoDiv = document.createElement('div');
+        infoDiv.style.cssText = 'font-size:12px;color:#aaa;margin-bottom:12px;';
+        infoDiv.textContent = `类型：全屏覆盖层（100vw × 100vh），z-index: ${domEl ? getComputedStyle(domEl).zIndex : '?'}`;
+        editorContainer.appendChild(infoDiv);
+        
+        // 预览框
+        const previewBox = document.createElement('div');
+        previewBox.style.cssText = `
+            width: 100%;
+            height: 100px;
+            border: 1px solid #444;
+            border-radius: 6px;
+            margin-bottom: 12px;
+            overflow: hidden;
+            position: relative;
+        `;
+        if (domEl) {
+            const bgStyle = getComputedStyle(domEl).backgroundImage;
+            if (bgStyle && bgStyle !== 'none') {
+                previewBox.style.backgroundImage = bgStyle;
+                previewBox.style.backgroundSize = 'cover';
+                previewBox.style.backgroundPosition = 'center';
+            } else {
+                previewBox.style.background = '#222';
+                previewBox.innerHTML = '<span style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:#666;font-size:12px;">无图片</span>';
+            }
+        }
+        editorContainer.appendChild(previewBox);
+        
+        // 换图按钮
+        const uploadBtn = this._createButton('📁 更换图片', '#2196F3', () => {
+            const fileInput = document.getElementById(layer.inputId);
+            if (fileInput) {
+                fileInput.click();
+            }
+        });
+        uploadBtn.style.width = '100%';
+        uploadBtn.style.marginBottom = '8px';
+        editorContainer.appendChild(uploadBtn);
+        
+        // 透明度控制
+        const opacityRow = document.createElement('div');
+        opacityRow.style.cssText = 'margin-top:12px;';
+        const opacityLabel = document.createElement('label');
+        opacityLabel.textContent = '透明度:';
+        opacityLabel.style.cssText = 'font-size:12px;color:#aaa;display:block;margin-bottom:4px;';
+        opacityRow.appendChild(opacityLabel);
+        
+        const opacitySlider = document.createElement('input');
+        opacitySlider.type = 'range';
+        opacitySlider.min = '0';
+        opacitySlider.max = '100';
+        opacitySlider.value = domEl ? Math.round(parseFloat(getComputedStyle(domEl).opacity) * 100) : 100;
+        opacitySlider.style.cssText = 'width:100%;';
+        opacitySlider.addEventListener('input', () => {
+            if (domEl) {
+                domEl.style.opacity = (parseInt(opacitySlider.value) / 100).toString();
+            }
+            opacityValue.textContent = opacitySlider.value + '%';
+        });
+        opacityRow.appendChild(opacitySlider);
+        
+        const opacityValue = document.createElement('span');
+        opacityValue.style.cssText = 'font-size:11px;color:#4CAF50;margin-left:8px;';
+        opacityValue.textContent = opacitySlider.value + '%';
+        opacityRow.appendChild(opacityValue);
+        editorContainer.appendChild(opacityRow);
+        
+        // 显示/隐藏切换
+        const visRow = document.createElement('div');
+        visRow.style.cssText = 'margin-top:12px;';
+        const visBtn = this._createButton(
+            domEl && domEl.style.display === 'none' ? '👁️ 显示' : '🙈 隐藏',
+            '#FF9800',
+            () => {
+                if (!domEl) return;
+                if (domEl.style.display === 'none') {
+                    domEl.style.display = 'block';
+                    visBtn.textContent = '🙈 隐藏';
+                } else {
+                    domEl.style.display = 'none';
+                    visBtn.textContent = '👁️ 显示';
+                }
+            }
+        );
+        visBtn.style.width = '100%';
+        visRow.appendChild(visBtn);
+        editorContainer.appendChild(visRow);
+    }
+
+    /**
      * 选择要编辑的元素
      * @param {string} elementId 元素ID
      */
@@ -516,7 +727,7 @@ class EditorManager {
         // 更新编辑按钮文本
         const editBtn = document.getElementById('editBtn');
         if (editBtn) {
-            editBtn.textContent = this.isEditMode ? '退出编辑模式 (`)' : '编辑模式 (`)';
+            editBtn.textContent = this.isEditMode ? '退出编辑' : '编辑模式';
             editBtn.style.background = this.isEditMode ? '#f44336' : '#4CAF50';
         }
         
@@ -557,31 +768,33 @@ class EditorManager {
     }
 
     /**
-     * 导入配置
+     * 导入配置（支持 ZIP 包含图片 或 旧版 JSON）
      */
     importConfig() {
         // 创建文件输入框
         const input = document.createElement('input');
         input.type = 'file';
-        input.accept = '.json';
+        input.accept = '.zip,.json';
         input.style.display = 'none';
         
-        input.addEventListener('change', (e) => {
+        input.addEventListener('change', async (e) => {
             const file = e.target.files[0];
             if (!file) return;
-            
-            const reader = new FileReader();
-            reader.onload = (event) => {
-                try {
-                    const config = JSON.parse(event.target.result);
+
+            try {
+                if (file.name.endsWith('.zip')) {
+                    await this._importFromZip(file);
+                } else {
+                    // 旧版 JSON 兼容
+                    const text = await file.text();
+                    const config = JSON.parse(text);
                     this._applyImportedConfig(config);
                     alert('配置导入成功！');
-                } catch (error) {
-                    console.error('❌ 解析配置文件失败:', error);
-                    alert('配置文件格式错误！');
                 }
-            };
-            reader.readAsText(file);
+            } catch (error) {
+                console.error('❌ 导入失败:', error);
+                alert('导入失败: ' + error.message);
+            }
             
             // 清理
             input.value = '';
@@ -593,19 +806,163 @@ class EditorManager {
     }
 
     /**
-     * 应用导入的配置
+     * 从 ZIP 文件导入配置和图片
+     * @param {File} zipFile ZIP 文件
+     */
+    async _importFromZip(zipFile) {
+        if (typeof JSZip === 'undefined') {
+            throw new Error('JSZip 库未加载，无法导入 ZIP 文件');
+        }
+
+        const zip = await JSZip.loadAsync(zipFile);
+
+        // 读取 config.json
+        const configFile = zip.file('config.json');
+        if (!configFile) {
+            throw new Error('ZIP 中未找到 config.json');
+        }
+        const configText = await configFile.async('string');
+        const config = JSON.parse(configText);
+
+        if (!config.uiElements || !Array.isArray(config.uiElements)) {
+            throw new Error('配置文件格式不正确：缺少 uiElements 数组');
+        }
+
+        let imageCount = 0;
+
+        // 遍历 uiElements，恢复图片到 IndexedDB
+        for (const elCfg of config.uiElements) {
+            if (!elCfg.id) continue;
+
+            // 如果有 imagePath，从 ZIP 中读取图片并存入 IndexedDB
+            if (elCfg.imagePath) {
+                const imageFile = zip.file(elCfg.imagePath);
+                if (imageFile) {
+                    try {
+                        const imageBlob = await imageFile.async('blob');
+                        // 将 Blob 转为 DataURL
+                        const dataUrl = await this._blobToDataUrl(imageBlob, elCfg.imagePath);
+
+                        // 存入 IndexedDB
+                        if (window.UIStorageManager &&
+                            typeof window.UIStorageManager.saveImageAsync === 'function') {
+                            await window.UIStorageManager.saveImageAsync(elCfg.id, dataUrl);
+                            imageCount++;
+                        }
+
+                        // 直接更新内存中的 UI 元素图片
+                        const uiElement = this.app.uiManager &&
+                            this.app.uiManager.elements.get(elCfg.id);
+                        if (uiElement && typeof uiElement.updateImage === 'function') {
+                            uiElement.updateImage(dataUrl);
+                        }
+                    } catch (imgErr) {
+                        console.warn(`⚠️ 恢复图片失败 (${elCfg.id}):`, imgErr);
+                    }
+                }
+            }
+
+            // 应用配置（位置/尺寸/阴影等）
+            const uiElement = this.app.uiManager &&
+                this.app.uiManager.elements.get(elCfg.id);
+            if (uiElement && typeof uiElement.importConfig === 'function') {
+                uiElement.importConfig(elCfg);
+            }
+        }
+
+        // 恢复壁纸/桌面层图片
+        if (config.layers && typeof config.layers === 'object') {
+            const layerMap = {
+                wallpaper: { idbKey: '_layer_wallpaper', domId: 'wallpaper' },
+                desktopLayer: { idbKey: '_layer_desktopLayer', domId: 'desktopLayer' }
+            };
+            for (const [layerKey, imagePath] of Object.entries(config.layers)) {
+                const layerInfo = layerMap[layerKey];
+                if (!layerInfo || !imagePath) continue;
+                const imageFile = zip.file(imagePath);
+                if (imageFile) {
+                    try {
+                        const imageBlob = await imageFile.async('blob');
+                        const dataUrl = await this._blobToDataUrl(imageBlob, imagePath);
+                        // 存入 IndexedDB
+                        if (window.UIStorageManager &&
+                            typeof window.UIStorageManager.saveImageAsync === 'function') {
+                            await window.UIStorageManager.saveImageAsync(layerInfo.idbKey, dataUrl);
+                            imageCount++;
+                        }
+                        // 即时应用到 DOM
+                        if (typeof _applyLayerImage === 'function') {
+                            _applyLayerImage(layerInfo.domId, dataUrl);
+                        }
+                    } catch (layerErr) {
+                        console.warn(`⚠️ 恢复${layerKey}层图片失败:`, layerErr);
+                    }
+                }
+            }
+        }
+
+        // 刷新编辑器
+        if (this.currentElementId) {
+            this.selectElement(this.currentElementId);
+        }
+
+        alert(`配置导入成功！恢复了 ${imageCount} 张图片。`);
+        console.log(`📥 ZIP 导入完成: ${config.uiElements.length} 个元素, ${imageCount} 张图片`);
+    }
+
+    /**
+     * 将 Blob 转为 DataURL
+     * @param {Blob} blob 图片 Blob
+     * @param {string} filePath 文件路径（用于推断 MIME）
+     * @returns {Promise<string>} DataURL
+     */
+    _blobToDataUrl(blob, filePath) {
+        return new Promise((resolve, reject) => {
+            // 确保 MIME 类型正确
+            let mime = blob.type;
+            if (!mime || mime === 'application/octet-stream') {
+                const ext = filePath.split('.').pop().toLowerCase();
+                const mimeMap = {
+                    png: 'image/png',
+                    jpg: 'image/jpeg',
+                    jpeg: 'image/jpeg',
+                    gif: 'image/gif',
+                    webp: 'image/webp',
+                    bmp: 'image/bmp'
+                };
+                mime = mimeMap[ext] || 'image/png';
+            }
+            const correctedBlob = new Blob([blob], { type: mime });
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = () => reject(new Error('Blob 转 DataURL 失败'));
+            reader.readAsDataURL(correctedBlob);
+        });
+    }
+
+    /**
+     * 应用导入的配置（兼容旧版 JSON 对象格式和新版数组格式）
      * @param {Object} config 配置文件
      */
     _applyImportedConfig(config) {
-        if (!config.uiElements) {
-            console.warn('⚠️ 配置文件缺少uiElements字段');
+        let entries = [];
+
+        if (Array.isArray(config.uiElements)) {
+            // 新版：数组格式 [{id, ...}, ...]
+            entries = config.uiElements.map(el => [el.id, el]);
+        } else if (config.uiElements && typeof config.uiElements === 'object') {
+            // 旧版：对象格式 { elementId: {...}, ... }
+            entries = Object.entries(config.uiElements);
+        } else {
+            console.warn('⚠️ 配置文件缺少 uiElements 字段');
             return;
         }
         
         console.log('📥 应用导入的配置:', config);
         
         // 应用到每个UI元素
-        for (const [elementId, elementConfig] of Object.entries(config.uiElements)) {
+        for (const [elementId, elementConfig] of entries) {
+            if (!elementId) continue;
             const uiElement = this.app.uiManager.elements.get(elementId);
             if (uiElement && typeof uiElement.importConfig === 'function') {
                 uiElement.importConfig(elementConfig);

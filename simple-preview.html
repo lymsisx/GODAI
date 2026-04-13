@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UI图标预览</title>
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            background: #1a1a1a; 
+            color: #fff; 
+            padding: 20px;
+            margin: 0;
+        }
+        h1 { 
+            color: #4CAF50; 
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .info-box {
+            background: #2a2a2a;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 30px;
+        }
+        .info-box p {
+            margin: 8px 0;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 20px;
+        }
+        .icon-card {
+            background: #2a2a2a;
+            border-radius: 10px;
+            padding: 15px;
+            text-align: center;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        .icon-card:hover {
+            transform: translateY(-5px);
+            background: #3a3a3a;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.3);
+        }
+        .icon-img {
+            width: 100px;
+            height: 100px;
+            object-fit: contain;
+            margin-bottom: 10px;
+            background: linear-gradient(45deg, #333, #444);
+            border-radius: 8px;
+            padding: 8px;
+        }
+        .icon-name {
+            font-size: 12px;
+            color: #bbb;
+            word-break: break-all;
+            margin-top: 5px;
+        }
+        .icon-index {
+            font-size: 11px;
+            color: #888;
+            margin-top: 5px;
+        }
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.9);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .modal-content {
+            max-width: 600px;
+            max-height: 600px;
+            background: #2a2a2a;
+            border-radius: 15px;
+            padding: 30px;
+            text-align: center;
+            position: relative;
+        }
+        .modal-img {
+            max-width: 100%;
+            max-height: 400px;
+            margin-bottom: 20px;
+        }
+        .modal-name {
+            font-size: 18px;
+            color: #fff;
+            margin-bottom: 10px;
+        }
+        .close-btn {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: #c62828;
+            color: white;
+            border: none;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        .close-btn:hover {
+            background: #d32f2f;
+        }
+        .navigation {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 20px;
+        }
+        .nav-btn {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .nav-btn:hover {
+            background: #5CBF60;
+        }
+        .nav-btn:disabled {
+            background: #666;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>UI图标提取预览</h1>
+        
+        <div class="info-box">
+            <p><strong>提取时间:</strong> 2026-04-13 15:52</p>
+            <p><strong>源图片:</strong> 图片参考-6b9d81d3-4e3a1d477ed.png (1003x1024)</p>
+            <p><strong>提取方法:</strong> 网格分割法 (9x9 网格)</p>
+            <p><strong>图标总数:</strong> 81 个</p>
+            <p><strong>图标尺寸:</strong> 200x200 像素 (透明背景)</p>
+            <p><strong>输出目录:</strong> assets/buttons/batch_20260413_1552/</p>
+        </div>
+        
+        <h2>图标预览 (81个)</h2>
+        <div class="grid" id="iconGrid">
+            <!-- 图标将通过JavaScript动态加载 -->
+        </div>
+    </div>
+    
+    <div class="modal" id="iconModal">
+        <div class="modal-content">
+            <button class="close-btn" onclick="closeModal()">×</button>
+            <img class="modal-img" id="modalImg" alt="">
+            <div class="modal-name" id="modalName"></div>
+            <div class="navigation">
+                <button class="nav-btn" id="prevBtn" onclick="prevIcon()">上一个</button>
+                <button class="nav-btn" id="nextBtn" onclick="nextIcon()">下一个</button>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // 图标数据 - 81个图标
+        const icons = [];
+        for (let row = 1; row <= 9; row++) {
+            for (let col = 1; col <= 9; col++) {
+                icons.push({
+                    name: `icon_${row}_${col}.png`,
+                    path: `assets/buttons/batch_20260413_1552/icon_${row}_${col}.png`,
+                    row: row,
+                    col: col
+                });
+            }
+        }
+        
+        let currentIconIndex = 0;
+        
+        // 初始化图标网格
+        function initIconGrid() {
+            const grid = document.getElementById('iconGrid');
+            icons.forEach((icon, index) => {
+                const card = document.createElement('div');
+                card.className = 'icon-card';
+                card.dataset.index = index;
+                card.onclick = () => openModal(index);
+                
+                card.innerHTML = `
+                    <img src="${icon.path}" alt="${icon.name}" class="icon-img">
+                    <div class="icon-name">${icon.name}</div>
+                    <div class="icon-index">第${icon.row}行 第${icon.col}列</div>
+                `;
+                
+                grid.appendChild(card);
+            });
+        }
+        
+        // 打开模态框
+        function openModal(index) {
+            currentIconIndex = index;
+            updateModal();
+            document.getElementById('iconModal').style.display = 'flex';
+        }
+        
+        // 关闭模态框
+        function closeModal() {
+            document.getElementById('iconModal').style.display = 'none';
+        }
+        
+        // 更新模态框内容
+        function updateModal() {
+            const icon = icons[currentIconIndex];
+            document.getElementById('modalImg').src = icon.path;
+            document.getElementById('modalName').textContent = `${icon.name} (第${icon.row}行 第${icon.col}列)`;
+            
+            // 更新导航按钮状态
+            document.getElementById('prevBtn').disabled = currentIconIndex === 0;
+            document.getElementById('nextBtn').disabled = currentIconIndex === icons.length - 1;
+        }
+        
+        // 上一个图标
+        function prevIcon() {
+            if (currentIconIndex > 0) {
+                currentIconIndex--;
+                updateModal();
+            }
+        }
+        
+        // 下一个图标
+        function nextIcon() {
+            if (currentIconIndex < icons.length - 1) {
+                currentIconIndex++;
+                updateModal();
+            }
+        }
+        
+        // 键盘导航
+        document.addEventListener('keydown', (e) => {
+            const modal = document.getElementById('iconModal');
+            if (modal.style.display === 'flex') {
+                if (e.key === 'ArrowLeft') prevIcon();
+                if (e.key === 'ArrowRight') nextIcon();
+                if (e.key === 'Escape') closeModal();
+            }
+        });
+        
+        // 初始化
+        initIconGrid();
+    </script>
+</body>
+</html>

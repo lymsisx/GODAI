@@ -27,7 +27,13 @@ class UIElementBase {
             visible: true,
             opacity: 1,
             backgroundColor: 'transparent',
-            objectFit: 'cover'
+            objectFit: 'cover',
+            shadow: {
+                offsetX: 4,
+                offsetY: 4,
+                color: 'rgba(0, 0, 0, 0.5)',
+                opacity: 0.7
+            }
         };
         
         // 合并配置
@@ -55,7 +61,7 @@ class UIElementBase {
                     if (savedConfig.width !== undefined && savedConfig.height !== undefined) {
                         this.config.baseSize = { width: savedConfig.width, height: savedConfig.height };
                     }
-                    if (savedConfig.shadow) {
+                    if (savedConfig.shadow && typeof savedConfig.shadow === 'object' && Object.keys(savedConfig.shadow).length > 0) {
                         this.config.shadow = savedConfig.shadow;
                     }
                     if (savedConfig.zIndex !== undefined) {
@@ -207,13 +213,13 @@ class UIElementBase {
         // 应用缩放
         this.applyScale();
         
-        // 应用阴影（如果配置了阴影）
+        // 将容器添加到body
+        document.body.appendChild(container);
+        
+        // 应用阴影（CSS drop-shadow 滤镜，贴合图片真实轮廓）
         if (this.config.shadow) {
             this.applyShadow(this.config.shadow);
         }
-        
-        // 将容器添加到body
-        document.body.appendChild(container);
         
         // 注意：render() 不主动调用 saveConfig()
         // 配置保存由用户操作（拖拽、编辑、上传图片）触发，避免注册时触发存图炸 localStorage
@@ -284,7 +290,9 @@ class UIElementBase {
     }
     
     /**
-     * 应用阴影效果
+     * 应用阴影效果（CSS drop-shadow 方案）
+     * 使用 CSS filter: drop-shadow() 沿图片实际可见像素轮廓生成阴影，
+     * 而非基于矩形盒模型，完美支持透明区域的不规则图片。
      * @param {Object} shadowConfig 阴影配置
      * @param {number} shadowConfig.offsetX X轴偏移
      * @param {number} shadowConfig.offsetY Y轴偏移
@@ -294,51 +302,68 @@ class UIElementBase {
     applyShadow(shadowConfig) {
         if (!shadowConfig || !this.domElement) return;
         
-        // 确保阴影元素存在
-        if (!this.shadowElement) {
-            this.shadowElement = document.createElement('div');
-            this.shadowElement.className = 'ui-element-shadow';
-            this.shadowElement.dataset.elementId = this.id;
-            this.shadowElement.dataset.type = 'shadow';
-            
-            // 插入到容器前面
-            if (this.domElement.parentNode) {
-                this.domElement.parentNode.insertBefore(this.shadowElement, this.domElement);
-            }
-        }
-        
         const Scaler = window.Scaler;
         if (!Scaler) {
             console.error('Scaler未加载');
             return;
         }
         
-        // 计算实际位置和尺寸
-        const actualPosition = Scaler.scalePosition(
-            this.config.basePosition.x,
-            this.config.basePosition.y
-        );
-        
-        const actualSize = Scaler.scaleSize(
-            this.config.baseSize.width,
-            this.config.baseSize.height
-        );
-        
-        // 计算阴影位置（向右下角偏移）
+        // 计算实际偏移像素
         const actualOffsetX = Scaler.toActual(shadowConfig.offsetX || 0);
         const actualOffsetY = Scaler.toActual(shadowConfig.offsetY || 0);
         
-        // 设置阴影样式
-        this.shadowElement.style.position = 'fixed';
-        this.shadowElement.style.left = `${actualPosition.x + actualOffsetX}px`;
-        this.shadowElement.style.top = `${actualPosition.y + actualOffsetY}px`;
-        this.shadowElement.style.width = `${actualSize.width}px`;
-        this.shadowElement.style.height = `${actualSize.height}px`;
-        this.shadowElement.style.backgroundColor = shadowConfig.color || 'rgba(0, 0, 0, 0.5)';
-        this.shadowElement.style.opacity = shadowConfig.opacity || 0.7;
-        this.shadowElement.style.zIndex = (this.config.zIndex || 100) - 1; // 低于主层
-        this.shadowElement.style.pointerEvents = 'none'; // 阴影不响应鼠标事件
-        this.shadowElement.style.display = this.config.visible ? 'block' : 'none';
+        // 将颜色和透明度合并为 rgba
+        const color = shadowConfig.color || '#000000';
+        const opacity = shadowConfig.opacity !== undefined ? shadowConfig.opacity : 0.7;
+        const shadowColor = this._colorWithOpacity(color, opacity);
+        
+        // 计算模糊半径
+        const blur = shadowConfig.blur !== undefined ? shadowConfig.blur : 0;
+        const actualBlur = Scaler.toActual(blur);
+        
+        // 使用 CSS drop-shadow 滤镜 —— 沿实际像素轮廓生成阴影
+        this.domElement.style.filter = 
+            `drop-shadow(${actualOffsetX}px ${actualOffsetY}px ${actualBlur}px ${shadowColor})`;
+        
+        // 清理旧的独立阴影 div（兼容旧版数据迁移）
+        if (this.shadowElement) {
+            this.shadowElement.remove();
+            this.shadowElement = null;
+        }
+    }
+    
+    /**
+     * 将颜色值和透明度合并为 rgba 字符串
+     * @param {string} color HEX 或 rgb/rgba 颜色
+     * @param {number} opacity 0~1 透明度
+     * @returns {string} rgba 颜色字符串
+     * @private
+     */
+    _colorWithOpacity(color, opacity) {
+        // 处理 HEX 颜色
+        if (color.startsWith('#')) {
+            const hex = color.replace('#', '');
+            let r, g, b;
+            if (hex.length === 3) {
+                r = parseInt(hex[0] + hex[0], 16);
+                g = parseInt(hex[1] + hex[1], 16);
+                b = parseInt(hex[2] + hex[2], 16);
+            } else {
+                r = parseInt(hex.substring(0, 2), 16);
+                g = parseInt(hex.substring(2, 4), 16);
+                b = parseInt(hex.substring(4, 6), 16);
+            }
+            return `rgba(${r}, ${g}, ${b}, ${opacity})`;
+        }
+        // 处理 rgba(...)
+        if (color.startsWith('rgba')) {
+            return color.replace(/,\s*[\d.]+\)/, `, ${opacity})`);
+        }
+        // 处理 rgb(...)
+        if (color.startsWith('rgb')) {
+            return color.replace('rgb(', 'rgba(').replace(')', `, ${opacity})`);
+        }
+        return `rgba(0, 0, 0, ${opacity})`;
     }
     
     /**
@@ -421,9 +446,6 @@ class UIElementBase {
         if (this.domElement) {
             this.domElement.style.display = 'block';
         }
-        if (this.shadowElement) {
-            this.shadowElement.style.display = 'block';
-        }
         this.saveConfig();
     }
     
@@ -434,9 +456,6 @@ class UIElementBase {
         this.config.visible = false;
         if (this.domElement) {
             this.domElement.style.display = 'none';
-        }
-        if (this.shadowElement) {
-            this.shadowElement.style.display = 'none';
         }
         this.saveConfig();
     }
@@ -567,6 +586,10 @@ class UIElementBase {
      * 移除阴影
      */
     removeShadow() {
+        if (this.domElement) {
+            this.domElement.style.filter = 'none';
+        }
+        // 清理旧版遗留的独立阴影 div
         if (this.shadowElement) {
             this.shadowElement.remove();
             this.shadowElement = null;
@@ -652,15 +675,6 @@ class UIElementBase {
             const dy = e.clientY - this._dragStartMouseY;
             this.domElement.style.left = `${this._dragStartLeft + dx}px`;
             this.domElement.style.top  = `${this._dragStartTop  + dy}px`;
-
-            // 同步阴影
-            if (this.shadowElement) {
-                const Scaler = window.Scaler;
-                const ox = Scaler ? Scaler.toActual(this.config.shadow?.offsetX || 0) : 0;
-                const oy = Scaler ? Scaler.toActual(this.config.shadow?.offsetY || 0) : 0;
-                this.shadowElement.style.left = `${this._dragStartLeft + dx + ox}px`;
-                this.shadowElement.style.top  = `${this._dragStartTop  + dy + oy}px`;
-            }
         };
 
         this._onMouseUp = () => {
@@ -870,6 +884,7 @@ class UIElementBase {
         if (this.domElement && this.domElement.parentNode) {
             this.domElement.parentNode.removeChild(this.domElement);
         }
+        // 清理旧版遗留的独立阴影 div
         if (this.shadowElement && this.shadowElement.parentNode) {
             this.shadowElement.parentNode.removeChild(this.shadowElement);
         }
@@ -945,9 +960,6 @@ class UIElementBase {
             if (this.domElement) {
                 this.domElement.style.zIndex = updates.zIndex.toString();
             }
-            if (this.shadowElement) {
-                this.shadowElement.style.zIndex = (updates.zIndex - 1).toString();
-            }
         }
         
         // 应用缩放（如果位置或尺寸发生变化）
@@ -1013,9 +1025,6 @@ class UIElementBase {
         if (this.config.zIndex !== undefined) {
             if (this.domElement) {
                 this.domElement.style.zIndex = this.config.zIndex.toString();
-            }
-            if (this.shadowElement) {
-                this.shadowElement.style.zIndex = (this.config.zIndex - 1).toString();
             }
         }
         

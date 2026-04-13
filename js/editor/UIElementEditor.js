@@ -38,7 +38,8 @@ class UIElementEditor {
                 offsetX: 4,
                 offsetY: 4,
                 color: '#333333',
-                opacity: 0.7
+                opacity: 0.7,
+                blur: 0
             },
             visible: true,
             zIndex: 100,
@@ -211,7 +212,7 @@ class UIElementEditor {
         container.className = 'control-row';
         
         const label = document.createElement('label');
-        label.textContent = '位置 (基准像素):';
+        label.textContent = '位置 (基准坐标 2560×1440):';
         label.style.display = 'block';
         label.style.marginBottom = '5px';
         label.style.fontSize = '12px';
@@ -238,7 +239,8 @@ class UIElementEditor {
         xInput.style.padding = '3px';
         xInput.style.fontSize = '12px';
         xInput.addEventListener('input', () => {
-            this._updatePosition('x', parseInt(xInput.value) || 0);
+            const baseValue = parseInt(xInput.value) || 0;
+            this._updatePosition('x', baseValue);
         });
         xContainer.appendChild(xInput);
         
@@ -262,7 +264,8 @@ class UIElementEditor {
         yInput.style.padding = '3px';
         yInput.style.fontSize = '12px';
         yInput.addEventListener('input', () => {
-            this._updatePosition('y', parseInt(yInput.value) || 0);
+            const baseValue = parseInt(yInput.value) || 0;
+            this._updatePosition('y', baseValue);
         });
         yContainer.appendChild(yInput);
         
@@ -284,7 +287,7 @@ class UIElementEditor {
         container.className = 'control-row';
         
         const label = document.createElement('label');
-        label.textContent = '尺寸 (基准像素):';
+        label.textContent = '尺寸 (基准坐标 2560×1440):';
         label.style.display = 'block';
         label.style.marginBottom = '5px';
         label.style.fontSize = '12px';
@@ -311,7 +314,8 @@ class UIElementEditor {
         widthInput.style.padding = '3px';
         widthInput.style.fontSize = '12px';
         widthInput.addEventListener('input', () => {
-            this._updateSize('width', parseInt(widthInput.value) || 10);
+            const baseValue = parseInt(widthInput.value) || 10;
+            this._updateSize('width', baseValue);
         });
         widthContainer.appendChild(widthInput);
         
@@ -335,7 +339,8 @@ class UIElementEditor {
         heightInput.style.padding = '3px';
         heightInput.style.fontSize = '12px';
         heightInput.addEventListener('input', () => {
-            this._updateSize('height', parseInt(heightInput.value) || 10);
+            const baseValue = parseInt(heightInput.value) || 10;
+            this._updateSize('height', baseValue);
         });
         heightContainer.appendChild(heightInput);
         
@@ -486,6 +491,41 @@ class UIElementEditor {
         container.appendChild(colorContainer);
         container.appendChild(opacityContainer);
         
+        // 阴影模糊度
+        const blurContainer = document.createElement('div');
+        blurContainer.style.display = 'block';
+        blurContainer.style.marginTop = '5px';
+        
+        const blurLabel = document.createElement('span');
+        blurLabel.textContent = '模糊度:';
+        blurLabel.style.marginRight = '5px';
+        blurLabel.style.fontSize = '12px';
+        blurContainer.appendChild(blurLabel);
+        
+        const blurInput = document.createElement('input');
+        blurInput.type = 'range';
+        blurInput.min = '0';
+        blurInput.max = '20';
+        blurInput.step = '1';
+        blurInput.value = this.config.shadow.blur || 0;
+        blurInput.style.width = '150px';
+        blurInput.style.verticalAlign = 'middle';
+        blurInput.addEventListener('input', () => {
+            const blur = parseInt(blurInput.value) || 0;
+            this._updateShadow('blur', blur);
+            if (blurValue) blurValue.textContent = `${blur}px`;
+        });
+        blurContainer.appendChild(blurInput);
+        
+        const blurValue = document.createElement('span');
+        blurValue.textContent = `${blurInput.value}px`;
+        blurValue.style.marginLeft = '5px';
+        blurValue.style.fontSize = '11px';
+        blurValue.style.verticalAlign = 'middle';
+        blurContainer.appendChild(blurValue);
+        
+        container.appendChild(blurContainer);
+        
         // 存储控件引用
         this.controls.shadowOffsetX = offsetXInput;
         this.controls.shadowOffsetY = offsetYInput;
@@ -493,6 +533,8 @@ class UIElementEditor {
         this.controls.shadowColorPreview = colorPreview;
         this.controls.shadowOpacity = opacityInput;
         this.controls.shadowOpacityValue = opacityValue;
+        this.controls.shadowBlur = blurInput;
+        this.controls.shadowBlurValue = blurValue;
         
         return container;
     }
@@ -761,6 +803,8 @@ class UIElementEditor {
                 if (this.controls.shadowColorPreview) this.controls.shadowColorPreview.textContent = defaultConfig.shadow.color;
                 if (this.controls.shadowOpacity) this.controls.shadowOpacity.value = defaultConfig.shadow.opacity * 100;
                 if (this.controls.shadowOpacityValue) this.controls.shadowOpacityValue.textContent = `${defaultConfig.shadow.opacity * 100}%`;
+                if (this.controls.shadowBlur) this.controls.shadowBlur.value = defaultConfig.shadow.blur || 0;
+                if (this.controls.shadowBlurValue) this.controls.shadowBlurValue.textContent = `${defaultConfig.shadow.blur || 0}px`;
             }
             
             // 应用更改
@@ -799,7 +843,6 @@ class UIElementEditor {
             ? this.uiElement.getConfig()
             : this.config;
         
-        // 更新控件值
         if (this.controls.positionX) {
             this.controls.positionX.value = this.config.x;
             this.controls.positionY.value = this.config.y;
@@ -815,6 +858,8 @@ class UIElementEditor {
                 this.controls.shadowColorPreview.textContent = this.config.shadow.color;
                 this.controls.shadowOpacity.value = (this.config.shadow.opacity || 0.7) * 100;
                 this.controls.shadowOpacityValue.textContent = `${Math.round((this.config.shadow.opacity || 0.7) * 100)}%`;
+                if (this.controls.shadowBlur) this.controls.shadowBlur.value = this.config.shadow.blur || 0;
+                if (this.controls.shadowBlurValue) this.controls.shadowBlurValue.textContent = `${this.config.shadow.blur || 0}px`;
             }
         }
         

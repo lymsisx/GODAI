@@ -37,7 +37,7 @@
             height: 100vh; 
             background: url('assets/desktop/defaut.png') no-repeat center center;
             background-size: 100% 100%;
-            z-index: 2; /* 位于壁纸层之上，UI元素层之下 */
+            z-index: 999;
         }
         
         /* 编辑按钮 */
@@ -52,11 +52,29 @@
             font-size: 18px; 
             cursor: pointer; 
             border-radius: 5px; 
-            z-index: 1000; 
+            z-index: 10000; /* 必须高于桌面层(999)和所有UI组件 */
         }
         
         #editBtn:hover {
             background: #45a049;
+        }
+        
+        /* 隐藏UI按钮 */
+        #screenshotBtn {
+            position: fixed;
+            top: 20px;
+            left: 200px;
+            padding: 15px 25px;
+            background: #2196F3;
+            color: white;
+            border: none;
+            font-size: 18px;
+            cursor: pointer;
+            border-radius: 5px;
+            z-index: 10000;
+        }
+        #screenshotBtn:hover {
+            background: #1976D2;
         }
         
         /* 隐藏的文件输入 */
@@ -67,7 +85,8 @@
     <link rel="stylesheet" href="css/ui-elements.css">
 </head>
 <body>
-    <button id="editBtn" onclick="toggleEdit()">编辑模式 (`)</button>
+    <button id="editBtn" onclick="toggleEdit()">编辑模式</button>
+    <button id="screenshotBtn" title="按 ` 键隐藏所有辅助UI，方便手动截图" onclick="hideUI()">隐藏UI (`)</button>
     
     <!-- 壁纸层 - 全屏 -->
     <div id="wallpaper"></div>
@@ -93,6 +112,9 @@
     <!-- 编辑面板：新版动态创建，此处保留DOM占位 -->
     <div id="editPanel" style="display: none;"></div>
 
+    <!-- JSZip 打包库（导出/导入配置+图片） -->
+    <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+
     <script>
         // 全局应用实例引用
         let appInstance = null;
@@ -104,6 +126,13 @@
             }
         }
 
+        // 隐藏/显示辅助 UI（编辑面板、按钮、缩放信息），方便手动截图
+        function hideUI() {
+            if (window.appInstance && window.appInstance.editorManager) {
+                window.appInstance.editorManager._toggleUIVisibility();
+            }
+        }
+
         // 处理文件选择 - 与UI元素系统交互
         function handleFileSelect(input, elementId) {
             const file = input.files[0];
@@ -111,27 +140,61 @@
 
             const reader = new FileReader();
             reader.onload = function(e) {
+                const dataUrl = e.target.result;
+
                 if (elementId === 'wallpaper') {
-                    const wallpaper = document.getElementById('wallpaper');
-                    if (wallpaper) {
-                        wallpaper.style.background = 'url(' + e.target.result + ') no-repeat center center';
-                        wallpaper.style.backgroundSize = '100% 100%';
+                    _applyLayerImage('wallpaper', dataUrl);
+                    // 持久化到 IndexedDB
+                    if (window.UIStorageManager && typeof window.UIStorageManager.saveImageAsync === 'function') {
+                        window.UIStorageManager.saveImageAsync('_layer_wallpaper', dataUrl);
                     }
                 } else if (elementId === 'desktopLayer') {
-                    const desktop = document.getElementById('desktopLayer');
-                    if (desktop) {
-                        desktop.style.background = 'url(' + e.target.result + ') no-repeat center center';
-                        desktop.style.backgroundSize = '100% 100%';
+                    _applyLayerImage('desktopLayer', dataUrl);
+                    if (window.UIStorageManager && typeof window.UIStorageManager.saveImageAsync === 'function') {
+                        window.UIStorageManager.saveImageAsync('_layer_desktopLayer', dataUrl);
                     }
                 } else if (window.appInstance && window.appInstance.uiManager) {
                     const uiElement = window.appInstance.uiManager.elements.get(elementId);
                     if (uiElement && typeof uiElement.updateImage === 'function') {
-                        uiElement.updateImage(e.target.result);
+                        uiElement.updateImage(dataUrl);
                     }
                 }
             };
             reader.readAsDataURL(file);
             input.value = '';
+        }
+
+        /**
+         * 将图片应用到壁纸/桌面层 DOM
+         * @param {string} domId DOM 元素 ID
+         * @param {string} dataUrl 图片 DataURL
+         */
+        function _applyLayerImage(domId, dataUrl) {
+            const el = document.getElementById(domId);
+            if (!el) return;
+            el.style.background = 'url(' + dataUrl + ') no-repeat center center';
+            el.style.backgroundSize = '100% 100%';
+        }
+
+        /**
+         * 页面加载时从 IndexedDB 恢复壁纸/桌面层图片
+         */
+        function _restoreLayerImages() {
+            if (!window.UIStorageManager || typeof window.UIStorageManager.loadImageAsync !== 'function') return;
+
+            const layers = [
+                { key: '_layer_wallpaper', domId: 'wallpaper' },
+                { key: '_layer_desktopLayer', domId: 'desktopLayer' }
+            ];
+
+            for (const layer of layers) {
+                window.UIStorageManager.loadImageAsync(layer.key).then(dataUrl => {
+                    if (dataUrl) {
+                        _applyLayerImage(layer.domId, dataUrl);
+                        console.log(`📂 恢复${layer.domId}层图片`);
+                    }
+                }).catch(() => {});
+            }
         }
     </script>
     
